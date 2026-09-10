@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1787705423152,
+      "tag": "0000_fair_lilandra",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1787722916595,
+      "tag": "0001_steep_kulan_gath",
+      "breakpoints": true
+    }
+  ]
+}
