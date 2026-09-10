@@ -4,7 +4,9 @@ Ce document décrit comment déployer Divine Motion directement sur
 Cloudflare Workers, en parallèle du flux ChatGPT Sites existant (qui
 continue de fonctionner sans changement). **Rien n'a été déployé par cette
 phase** : ce qui suit est une procédure prête à l'emploi, à exécuter
-volontairement.
+volontairement. Pour une checklist séquentielle prête à suivre du premier
+au dernier pas, voir `STAGING_SETUP.md` — ce document-ci en est la
+référence détaillée.
 
 ## Ce que cette phase a préparé, concrètement
 
@@ -64,6 +66,9 @@ Pour chacun :
 - `CF_D1_DATABASE_ID`
 - `CF_R2_BUCKET_NAME`
 - `CF_ROUTE_PATTERN` (optionnel, nom d'hôte du domaine personnalisé)
+- `CF_ACCESS_TEAM_DOMAIN` / `CF_ACCESS_AUD` (staging uniquement pour
+  l'instant — voir `CLOUDFLARE_ACCESS_SETUP.md`. Non secrets, mais
+  spécifiques à l'environnement)
 
 Pour `production`, activer en plus la protection **« Required reviewers »**
 sur l'Environment (Settings → Environments → production → Deployment
@@ -143,15 +148,36 @@ d'authentification ci-dessous), lecture/écriture D1, upload/lecture R2,
 création de projet, publication, formulaire public, demande visible en
 admin.
 
-**Authentification sur staging** : tant que `AUTH_MIGRATION_PLAN.md` n'est
-pas mis en œuvre, `/admin` sur le Worker staging dépend toujours de l'en-tête
+**Authentification sur staging** : sans `CF_ACCESS_TEAM_DOMAIN`/`CF_ACCESS_AUD`
+configurées, `/admin` sur le Worker staging dépend toujours de l'en-tête
 `oai-authenticated-user-email` — qui n'existe **pas** sur un Worker déployé
-hors du dispatcher Sites. Le CMS ne sera donc pas accessible via un
-navigateur normal sur staging tant que la Phase 1 de la migration
-d'authentification n'est pas faite. En attendant, utiliser la méthode
-`curl` documentée dans `LOCAL_DEVELOPMENT.md` (fonctionne aussi contre une
-URL staging distante, pas seulement en local) pour valider les API
-`/api/admin/*`.
+hors du dispatcher Sites, donc le CMS n'est pas accessible via un navigateur
+normal (la vérification JSON `/api/admin/*` reste testable par `curl`, voir
+`LOCAL_DEVELOPMENT.md`, fonctionne aussi contre une URL staging distante).
+Une fois `CLOUDFLARE_ACCESS_SETUP.md` suivi et ces deux variables
+configurées, `/admin` devient utilisable via un navigateur normal, protégé
+par Cloudflare Access — voir ce document pour la procédure complète et la
+validation.
+
+**Logs** : pour surveiller l'authentification, les uploads, D1/R2 et les
+erreurs API en staging sans exposer de contenu sensible :
+
+```bash
+npx wrangler tail --config dist/server/wrangler.deploy.json
+```
+
+Le code journalise déjà (voir `lib/admin-auth.ts`, `lib/auth/cloudflare-access.ts`,
+`app/api/admin/media/route.ts`) les refus d'accès, les rejets de JWT, et les
+étapes du pipeline d'upload — jamais de contenu de fichier, de jeton, de
+cookie ni de mot de passe (voir ces fichiers pour le détail exact de ce qui
+est journalisé).
+
+**Cache** : `middleware.ts` (nouveau, racine du dépôt) applique
+`Cache-Control: private, no-store` à `/admin`, `/admin/:path*` et
+`/api/admin/:path*` uniquement — aucune route publique n'est concernée.
+Ajouté après avoir constaté, par un test réel (`curl -D -`), qu'aucun
+en-tête de cache n'était présent sur ces routes. Voir
+`STAGING_TEST_REPORT.md`, section A.3, pour le détail avant/après.
 
 ## Domaines
 

@@ -9,6 +9,8 @@ app/admin/project-manager.tsx
 app/admin/media-library.tsx
 app/api/admin/media/route.ts
 app/notre-travail/page.tsx
+app/admin/page.tsx
+lib/auth/cloudflare-access.ts
 scripts/deploy-config.mjs
 scripts/check-typescript-baseline.mjs
 scripts/check-eslint-baseline.mjs
@@ -16,3 +18,5 @@ tests/media-normalize.test.ts
 tests/auth-allowlist.test.ts
 tests/upload-limits.test.ts
 tests/schema-sql-consistency.test.ts
+tests/cloudflare-access.test.ts
+middleware.ts

@@ -1,10 +1,22 @@
 # Plan de migration de l'authentification admin
 
 Ce document propose une stratégie pour rendre l'accès `/admin` indépendant
-de ChatGPT Sites / SIWC. **Rien n'est mis en œuvre par ce document** :
-l'authentification actuelle (`app/chatgpt-auth.ts`, `lib/admin-auth.ts`)
-reste inchangée et fonctionnelle. Contexte de sécurité complet dans
+de ChatGPT Sites / SIWC. Contexte de sécurité complet dans
 `AUTH_TRUST_MODEL.md`.
+
+> **Mise à jour** : la Phase 1 ci-dessous (module de vérification JWT +
+> cohabitation SIWC/Access) est **implémentée et testée** depuis la phase
+> staging (`lib/auth/cloudflare-access.ts`, `lib/admin-auth.ts`,
+> `tests/cloudflare-access.test.ts` — 9 tests, vérification cryptographique
+> réelle contre une paire de clés locale, voir `STAGING_TEST_REPORT.md`).
+> **Ce qui reste à faire** — et qui nécessite votre compte Cloudflare, non
+> disponible dans cette session — c'est la validation **en conditions
+> réelles** contre une véritable équipe Cloudflare Access : voir
+> `CLOUDFLARE_ACCESS_SETUP.md` et `STAGING_SETUP.md`. L'authentification
+> actuelle (SIWC) reste inchangée et pleinement fonctionnelle tant que cette
+> validation n'a pas eu lieu — comportement identique à avant si
+> `CF_ACCESS_TEAM_DOMAIN`/`CF_ACCESS_AUD` ne sont pas configurées sur un
+> environnement (le cas de la production Sites actuelle).
 
 ## Contrainte de départ
 
@@ -121,24 +133,34 @@ multiplier les fournisseurs.
 
 ## Plan de migration progressif
 
-**Phase 0 (faite dans cette phase-ci)** : documentation uniquement, aucun
-changement de code ni de configuration.
+**Phase 0 (faite lors de l'audit de portabilité)** : documentation
+uniquement, aucun changement de code ni de configuration.
 
-**Phase 1 — Validation sur staging** (précondition : un Worker staging
-déployé sur un domaine propre à l'équipe, voir `DEPLOYMENT_OUTSIDE_SITES.md`) :
-1. Activer Cloudflare Zero Trust sur le compte (gratuit).
-2. Créer une politique Access protégeant `/admin*` et `/api/admin/*` sur le
-   domaine staging, avec la liste des e-mails admins actuels.
-3. Ajouter un module `lib/access-auth.ts` (nouveau fichier, n'existe pas
-   encore) qui vérifie le JWT `Cf-Access-Jwt-Assertion` contre les clés
-   publiques de l'équipe.
-4. Faire cohabiter les deux méthodes le temps du test : `getAuthorizedAdmin()`
-   accepte un utilisateur reconnu **soit** par SIWC (comme aujourd'hui),
-   **soit** par un JWT Access valide — sans retirer SIWC. C'est la
-   « migration progressive » demandée : aucune régression possible tant que
-   les deux chemins coexistent.
-5. Tester le parcours complet (connexion, CMS, éditeur visuel, publication)
-   sur staging avec Access actif.
+**Phase 1 — Module et cohabitation (fait), validation réelle (à faire par
+vous)** (précondition : un Worker staging déployé sur un domaine propre à
+l'équipe, voir `DEPLOYMENT_OUTSIDE_SITES.md`) :
+1. ~~Activer Cloudflare Zero Trust sur le compte (gratuit).~~ → à faire par
+   vous, voir `CLOUDFLARE_ACCESS_SETUP.md` (nécessite votre compte Cloudflare).
+2. ~~Créer une politique Access protégeant `/admin*` et `/api/admin/*`~~ → à
+   faire par vous, procédure détaillée dans `CLOUDFLARE_ACCESS_SETUP.md`.
+3. **Fait** : `lib/auth/cloudflare-access.ts` vérifie le JWT
+   `Cf-Access-Jwt-Assertion` contre les clés publiques de l'équipe (JWKS
+   distant, mis en cache par isolat), avec vérification de signature,
+   émetteur, audience et expiration — pas seulement de présence de l'en-tête.
+4. **Fait** : `lib/admin-auth.ts` (`getCurrentUser()`) fait cohabiter les
+   deux méthodes — SIWC essayé en premier (comportement inchangé), puis
+   Cloudflare Access uniquement si `CF_ACCESS_TEAM_DOMAIN`/`CF_ACCESS_AUD`
+   sont configurées. Aucune fusion de logique : c'est un **OU** strict entre
+   deux vérifications indépendantes (voir le risque correspondant plus bas).
+   Vérifié par exécution réelle (pas seulement lu) : sur un serveur de
+   développement local avec les deux en-têtes testés séparément, SIWC reste
+   fonctionnel à l'identique, et un jeton Access invalide/expiré/mal signé
+   échoue proprement (401), sans jamais faire planter la requête — voir
+   `STAGING_TEST_REPORT.md`.
+5. **À faire par vous** : avec une vraie équipe Cloudflare Access
+   configurée (étapes 1-2), tester le parcours complet (connexion, CMS,
+   éditeur visuel, publication) sur staging avec Access actif — c'est le
+   seul morceau qui ne pouvait pas être vérifié sans votre compte Cloudflare.
 
 **Phase 2 — Bascule production** (seulement après validation complète de la
 Phase 1, et seulement quand la production elle-même sera hors Sites ou que

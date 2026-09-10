@@ -14,7 +14,7 @@ provisionner quand vous serez prêt.
 | Hébergement | Miniflare (simulateur local, aucun accès Cloudflare requis) | Cloudflare Workers (Worker distinct) | Cloudflare Workers (Worker distinct, celui déjà géré par Sites aujourd'hui) |
 | D1 | Simulée par Miniflare (`.wrangler/state/…`, jetable) | Base D1 réelle dédiée, vide au départ | Base D1 réelle (celle déjà utilisée par Sites) |
 | R2 | Simulé par Miniflare (jetable) | Bucket R2 réel dédié, vide au départ | Bucket R2 réel (celui déjà utilisé par Sites) |
-| Domaine | `localhost:5173` | Sous-domaine dédié (ex. `staging.divine-motion.<domaine>`, voir §16 de la demande / `DEPLOYMENT_OUTSIDE_SITES.md`) | Domaine public actuel (`*.chatgpt.site` tant que la bascule n'a pas eu lieu) ou domaine personnalisé une fois choisi |
+| Domaine | `localhost:5173` | Sous-domaine dédié, ex. `staging.divinemotion.ca` (ou un domaine temporaire `*.workers.dev` si le domaine définitif n'est pas encore ajouté à Cloudflare — voir `DEPLOYMENT_OUTSIDE_SITES.md`) | Domaine public actuel (`*.chatgpt.site` tant que la bascule n'a pas eu lieu) ou domaine personnalisé une fois choisi |
 | Auth admin | En-tête simulé manuellement (voir `LOCAL_DEVELOPMENT.md`) | Selon `AUTH_MIGRATION_PLAN.md` — SIWC tant que non migré, ou la nouvelle méthode en test | SIWC (inchangé tant que la migration n'est pas validée) |
 | Secrets | `.dev.vars` (non commité) | Secrets Cloudflare de l'environnement `staging` | Secrets Cloudflare de l'environnement `production`, gérés comme aujourd'hui |
 | Qui y touche | Vous | Équipe + revue avant bascule en production | Personne directement — uniquement via déploiement validé depuis `main` |
@@ -66,7 +66,58 @@ sûr et plus reproductible qu'un export/import partiel de la production.
 | `CF_D1_DATABASE_NAME` | `divine-motion-staging` | idem |
 | `CF_D1_DATABASE_ID` | UUID retourné par `wrangler d1 create` | idem — pas un secret, mais spécifique à l'environnement |
 | `CF_R2_BUCKET_NAME` | `divine-motion-staging-media` | idem |
-| `CF_ROUTE_PATTERN` | Domaine staging retenu (optionnel tant qu'aucun domaine n'est choisi) | idem |
+| `CF_ROUTE_PATTERN` | Domaine staging retenu, ex. `staging.divinemotion.ca` (optionnel tant qu'aucun domaine n'est choisi) | idem |
+| `CF_ACCESS_TEAM_DOMAIN` | `<équipe>.cloudflareaccess.com` | Non secret ; voir `CLOUDFLARE_ACCESS_SETUP.md`. Absent = SIWC reste le seul chemin (identique à aujourd'hui) |
+| `CF_ACCESS_AUD` | Balise AUD de l'application Access | idem — non secrète, identifiant public |
+
+### D1 staging — fiche de référence
+
+| Élément | Valeur |
+|---|---|
+| Nom de la base | `divine-motion-staging` (à adapter si un autre nom est choisi) |
+| Binding | `DB` (identique à tous les environnements — voir `lib/cms-db.ts`) |
+| Migrations appliquées | `drizzle/0000_fair_lilandra.sql`, `drizzle/0001_steep_kulan_gath.sql` (schéma complet, aucune donnée) |
+| Base de départ | Vide — jamais un export de production |
+
+**Procédure de reset staging** (efface tout le contenu de test, reconstruit
+un schéma propre) :
+
+```bash
+npx wrangler d1 execute divine-motion-staging --remote \
+  --command="DROP TABLE IF EXISTS audit_log; DROP TABLE IF EXISTS inquiry_notes; DROP TABLE IF EXISTS inquiries; DROP TABLE IF EXISTS admin_users; DROP TABLE IF EXISTS team_members; DROP TABLE IF EXISTS services; DROP TABLE IF EXISTS media; DROP TABLE IF EXISTS project_sections; DROP TABLE IF EXISTS projects; DROP TABLE IF EXISTS cms_settings;"
+npx wrangler d1 execute divine-motion-staging --remote --file=drizzle/0000_fair_lilandra.sql
+npx wrangler d1 execute divine-motion-staging --remote --file=drizzle/0001_steep_kulan_gath.sql
+```
+
+**Procédure de backup staging** (utile avant un test destructif, ou juste
+avant un reset) :
+
+```bash
+npx wrangler d1 export divine-motion-staging --remote --output backup-staging-$(date +%Y%m%d-%H%M).sql
+```
+
+**Données de test** : si des données sont nécessaires pour tester le CMS,
+les créer directement via l'admin staging une fois déployé (voir
+`STAGING_TEST_REPORT.md`), avec un préfixe explicite `TEST —` dans les
+titres/noms (ex. « TEST — Mariage Dupont »), jamais de données réelles de
+clients copiées depuis la production.
+
+### R2 staging — fiche de référence
+
+| Élément | Valeur |
+|---|---|
+| Nom du bucket | `divine-motion-staging-media` |
+| Binding | `BUCKET` (identique à tous les environnements) |
+| Politique d'accès | Privée (pas de lecture publique directe du bucket) — les médias sont toujours servis via `/api/media/[id]`, jamais par une URL R2 directe (voir `lib/cms-db.ts`, `app/api/media/[id]/route.ts`) |
+| Stratégie d'URL média | Inchangée par cette phase : `mediaUrl(id, variant)` → `/api/media/{id}?variant=...`, résolue par le Worker (D1 pour les métadonnées, R2 pour le contenu). Aucune URL n'encode le nom du bucket ni un domaine R2 direct — portable par construction |
+
+**Checklist de vérification R2 staging** (à cocher lors du test réel, voir
+`STAGING_TEST_REPORT.md`) : upload, lecture (variantes thumbnail/mobile/
+desktop/original), suppression (corbeille), remplacement, et nettoyage
+`abort-upload` en cas d'échec d'une séquence — les quatre premiers via
+l'admin, le dernier en interrompant volontairement un upload multi-parties
+(voir `app/api/admin/media/route.ts`, action `abort-upload`, ajoutée en
+Phase 1).
 
 ### Ce que staging doit permettre de tester
 
@@ -111,7 +162,7 @@ aucune bascule n'est effectuée maintenant.
 | Environnement | Domaine prévu | SSL |
 |---|---|---|
 | Local | `localhost:5173` | N/A |
-| Staging | Sous-domaine dédié à choisir (ex. `staging.<domaine-final>`) | Automatique via Cloudflare une fois le domaine ajouté à la zone |
+| Staging | `staging.divinemotion.ca` (cible) ou `<nom-worker>.<compte>.workers.dev` (temporaire, fourni automatiquement par Cloudflare, sans configuration DNS) | Automatique via Cloudflare — y compris sur `workers.dev` |
 | Production | Domaine actuel `*.chatgpt.site` jusqu'à bascule, puis domaine personnalisé à choisir | Automatique via Cloudflare |
 
 Aucune modification DNS n'a été faite. Voir `DEPLOYMENT_OUTSIDE_SITES.md`
