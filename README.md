@@ -4,6 +4,12 @@ A clean full-stack starter running on
 [vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
 Drizzle support.
 
+> Ce README documente le flux ChatGPT Sites d'origine (toujours valide et
+> inchangé). Pour développer/déployer ce projet **sans passer par Sites**
+> (local, staging, production sur Cloudflare direct), voir
+> `PORTABILITY_AUDIT.md`, `LOCAL_DEVELOPMENT.md`, `ENVIRONMENTS.md`,
+> `AUTH_MIGRATION_PLAN.md` et `DEPLOYMENT_OUTSIDE_SITES.md`.
+
 ## Prerequisites
 
 - Node.js `>=22.13.0`

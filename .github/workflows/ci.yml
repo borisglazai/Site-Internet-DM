@@ -1,0 +1,55 @@
+name: CI
+
+# Vérifie chaque PR/push vers main ou staging : install, tests unitaires,
+# typecheck, lint ciblé, build. Ne déploie rien (voir
+# DEPLOYMENT_OUTSIDE_SITES.md pour le déploiement, distinct et manuel/contrôlé).
+#
+# Le lint complet du dépôt porte une dette préexistante documentée
+# (TEST_REPORT_PHASE1.md §6, PORTABILITY_AUDIT.md) : il tourne ici à titre
+# informatif seulement (continue-on-error), pour ne pas bloquer des
+# contributions sans rapport avec elle. Le typecheck et le lint ciblé,
+# eux, bloquent la CI dès qu'une NOUVELLE erreur apparaît par rapport à la
+# référence connue (scripts/typescript-baseline-count.txt,
+# scripts/eslint-baseline-count.json) — voir ces scripts pour le détail.
+
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+    branches: [main, staging]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.13.0"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Unit tests (32 tests, aucune dépendance D1/R2 réelle)
+        run: npm run test:unit
+
+      - name: Typecheck — aucune nouvelle erreur vs référence connue
+        run: npm run typecheck:baseline
+
+      - name: Lint ciblé — fichiers Phase 1 / portabilité (bloquant)
+        run: npm run lint:targeted
+
+      - name: Lint complet du dépôt (informatif — dette préexistante connue)
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Build (vinext → dist/client + dist/server)
+        run: npm run build
