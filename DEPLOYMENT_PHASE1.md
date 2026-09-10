@@ -35,7 +35,14 @@ app/admin/media-library.tsx
 app/api/admin/media/route.ts
 app/notre-travail/page.tsx
 tsconfig.json
+package.json
 ```
+
+Cette liste des 10 fichiers modifiés et des 8 nouveaux fichiers ci-dessous a
+été revérifiée par une comparaison fichier-par-fichier (`diff -rq`) entre le
+paquet d'audit d'origine et l'arborescence corrigée : ce sont exactement, et
+uniquement, les fichiers qui diffèrent. `package.json` ne contient qu'un
+ajout de script (`test:unit`), aucune dépendance modifiée.
 
 Nouveaux fichiers (à ajouter) :
 
