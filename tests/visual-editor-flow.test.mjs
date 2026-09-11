@@ -101,6 +101,7 @@ test("1. une page publique normale ne contient aucun état visuel d'édition", a
     assert.ok(!text.includes("data-edit-key"), `${path} ne doit porter aucun attribut data-edit-key`);
     assert.ok(!text.includes("data-media-key"), `${path} ne doit porter aucun attribut data-media-key`);
     assert.ok(!text.includes("data-section-key"), `${path} ne doit porter aucun attribut data-section-key`);
+    assert.ok(!text.includes("data-position-key"), `${path} ne doit porter aucun attribut data-position-key`);
     assert.ok(!text.includes("ve-bar"), `${path} ne doit pas charger la barre d'outils de l'éditeur`);
   }
 });
@@ -237,4 +238,48 @@ test("10. le statut reflète un brouillon existant à l'ouverture de l'éditeur"
     headers: { "content-type": "application/json", ...AUTH_HEADERS },
     body: JSON.stringify({ pageKey: "contact", action: "discard" }),
   });
+});
+
+// --- Polish média/panneau : cadrage, confirmation d'abandon ---
+
+const cropDraft = {
+  heroVisible: true,
+  heroType: "image",
+  heroMediaId: 1,
+  heroPosition: "center top",
+  heroTitle: "x",
+  heroSubtitle: "x",
+  cta1: "x",
+  cta1Url: "/contact",
+  cta2: "x",
+  cta2Url: "/contact",
+  services: [],
+  principles: [],
+  beyondItems: [],
+  filmCtaUrl: "/contact",
+  finalCtaUrl: "/contact",
+};
+
+test("11. le cadrage choisi persiste en brouillon et apparaît dans l'éditeur et l'aperçu", async () => {
+  await postVisualEditor("save", cropDraft);
+  const editor = await get("/admin/editor", AUTH_HEADERS);
+  assert.ok(editor.text.includes("object-position:center top"), "l'éditeur doit appliquer le cadrage du brouillon");
+  const previewView = await get("/admin/editor?preview=1", AUTH_HEADERS);
+  assert.ok(previewView.text.includes("object-position:center top"), "l'aperçu doit appliquer le cadrage du brouillon");
+  const pub = await get("/");
+  assert.ok(!pub.text.includes("center top"), "le site public ne doit pas encore refléter le cadrage non publié");
+});
+
+test("12. publier applique le cadrage choisi au site public", async () => {
+  await postVisualEditor("publish", cropDraft);
+  const pub = await get("/");
+  assert.ok(pub.text.includes("object-position:center top"), "le site public doit refléter le cadrage publié");
+});
+
+test("13. « Abandonner le brouillon » n'est plus une action de premier niveau", async () => {
+  const { text } = await get("/admin/editor", AUTH_HEADERS);
+  // Le bouton ne doit plus apparaître par défaut : il est maintenant replié
+  // dans le menu secondaire "⋯" (rendu uniquement une fois ouvert côté client).
+  assert.ok(!text.includes(">Abandonner le brouillon<"), "le bouton ne doit pas être exposé directement dans la barre");
+  assert.ok(text.includes('aria-label="Plus d’actions"'), "le déclencheur du menu secondaire doit être présent");
 });

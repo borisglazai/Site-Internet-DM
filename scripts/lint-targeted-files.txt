@@ -37,3 +37,6 @@ app/admin/editor/a-propos/page.tsx
 app/admin/editor/contact/page.tsx
 app/admin/editor/projets/[slug]/page.tsx
 tests/visual-editor-flow.test.mjs
+lib/media-label.ts
+lib/section-order.ts
+tests/editor-panel-helpers.test.ts
