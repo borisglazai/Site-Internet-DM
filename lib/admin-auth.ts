@@ -125,3 +125,25 @@ export async function requireAdmin(): Promise<CurrentUser> {
 // Alias conservés pour ne pas toucher aux appels existants (app/**, lib/editor-session.ts) :
 // même comportement, nouveaux noms recommandés pour le code futur.
 export const requireAdminApi = requireAdmin;
+
+/**
+ * Indique si Cloudflare Access est configuré pour cet environnement (les
+ * deux variables sont renseignées sur le Worker déployé — voir
+ * CLOUDFLARE_ACCESS_SETUP.md). Sert uniquement à choisir quel écran de
+ * connexion présenter côté page (SIWC vs Access, voir app/admin/page.tsx) —
+ * n'intervient jamais dans `getCurrentUser()`/`getAuthorizedAdmin()`, qui
+ * essaient toujours les deux fournisseurs indépendamment de cet indicateur.
+ */
+export function isCloudflareAccessConfigured(): boolean {
+  const { CF_ACCESS_TEAM_DOMAIN, CF_ACCESS_AUD } = runtimeEnv();
+  return Boolean(CF_ACCESS_TEAM_DOMAIN && CF_ACCESS_AUD);
+}
+
+/**
+ * URL de déconnexion Cloudflare Access pour l'équipe configurée, ou `null`
+ * si Access n'est pas configuré sur cet environnement.
+ */
+export function cloudflareAccessLogoutUrl(): string | null {
+  const { CF_ACCESS_TEAM_DOMAIN } = runtimeEnv();
+  return CF_ACCESS_TEAM_DOMAIN ? `https://${CF_ACCESS_TEAM_DOMAIN}/cdn-cgi/access/logout` : null;
+}
