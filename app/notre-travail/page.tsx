@@ -213,7 +213,7 @@ export function WorkBody({
           </div>
           <Link
             className="button button-dark"
-            href={work.urbanCtaUrl}
+            href={work.urbanCtaUrl || "/contact"}
             {...ea({ "data-link-label-key": "urbanCta", "data-link-url-key": "urbanCtaUrl" })}
           >
             <span {...ea({ "data-edit-key": "urbanCta" })}>{work.urbanCta}</span>

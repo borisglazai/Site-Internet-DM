@@ -165,3 +165,35 @@ test("6. publier met à jour le site public", async () => {
   const pub = await get("/");
   assert.ok(pub.text.includes("BROUILLON TEST XYZ"), "le site public doit refléter le contenu publié");
 });
+
+test("7. régression : un brouillon incomplet ne fait pas planter la prévisualisation (Link href indéfini)", async () => {
+  // Reproduit exactement le bug rapporté : un brouillon "work" sans
+  // urbanCtaUrl faisait planter /admin/editor/notre-travail?preview=1 avec
+  // "Cannot read properties of undefined (reading 'pathname')" dans le
+  // <Link> de la section urbaine (voir app/notre-travail/page.tsx). Ce test
+  // échoue si un futur champ consommé par un <Link href={...}> perd de
+  // nouveau son filet de sécurité (`|| "..."`).
+  const incompleteDraft = {
+    eyebrow: "x", title: "x", intro: "x",
+    storyLabel: "x", storyTitle: "x", storyDate: "2026-01-01", storyText: "x",
+    chapters: [], filmTitle: "x", projectsTitle: "x", projectsIntro: "x",
+    urbanLabel: "x", urbanTitle: "x", urbanIntro: "x", urbanGallery: [], urbanCta: "x",
+    // urbanCtaUrl volontairement absent
+  };
+  const response = await fetch(`${baseUrl}/api/admin/visual-editor`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...AUTH_HEADERS },
+    body: JSON.stringify({ pageKey: "work", action: "save", content: incompleteDraft }),
+  });
+  assert.equal(response.ok, true, "l'enregistrement du brouillon incomplet doit réussir");
+
+  const preview = await get("/admin/editor/notre-travail?preview=1", AUTH_HEADERS);
+  assert.equal(preview.response.status, 200, "la prévisualisation ne doit jamais renvoyer une erreur 500");
+  assert.ok(!preview.text.includes("Cannot read properties of undefined"), "aucun Link ne doit recevoir un href indéfini");
+
+  await fetch(`${baseUrl}/api/admin/visual-editor`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...AUTH_HEADERS },
+    body: JSON.stringify({ pageKey: "work", action: "discard" }),
+  });
+});
