@@ -2,8 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { MediaPlaceholder, PageShell } from "../site-components";
 import { displayDate, mediaUrl, pageMetadata, publishedProjects, setting } from "../../lib/public-cms";
-import { editorPage } from "../../lib/editor-page";
-import { VisualEditor } from "../visual-editor";
 import { normalizeChapterMedia } from "../../lib/media-normalize";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -20,7 +18,7 @@ const chapterDefaults = [
   { title: "Les détails", text: "Tout ce qui a été pensé avec soin et mérite d’être conservé.", media: [] },
 ];
 
-const defaults = {
+export const workDefaults = {
   eyebrow: "Portfolio éditorial",
   title: "Notre travail",
   intro: "Nous ne cherchons pas seulement les belles images. Nous cherchons les instants qui racontent quelque chose.",
@@ -46,23 +44,35 @@ const defaults = {
   customSections: [],
 };
 
-type Props = { searchParams: Promise<{ preview?: string }> };
-
-export default async function Work({ searchParams }: Props) {
-  const query = await searchParams;
+export async function loadWorkPublished() {
   const projects = await publishedProjects();
-  const stored = await setting("work", defaults);
+  const stored = await setting("work", workDefaults);
   const general = await setting("general", {});
-  const state = await editorPage("work", { ...defaults, ...stored, general }, query.preview === "1");
-  const work = state.content;
+  return { work: { ...workDefaults, ...stored, general }, projects };
+}
+
+// Rendu partagé entre la page publique (editable=false) et l'éditeur visuel
+// protégé sous /admin/editor/notre-travail (editable=true) — voir
+// app/page.tsx pour le même principe appliqué à l'accueil.
+export function WorkBody({
+  work,
+  projects,
+  editable = false,
+  editBasePath,
+}: {
+  work: Record<string, any>;
+  projects: any[];
+  editable?: boolean;
+  editBasePath?: string;
+}) {
+  const ea = (attrs: Record<string, string>) => (editable ? attrs : {});
 
   // `work.chapters` vient d'un JSON libre (cms_settings), sans passer par la
   // normalisation déjà appliquée aux galeries de projets (lib/public-cms.ts).
   // Une entrée `null`/`undefined` dans `chapters[i].media` faisait planter le
   // rendu de cette page (voir AUDIT_DIVINE_MOTION.md, correctif Phase 1 #2).
-  // On normalise uniquement la copie utilisée pour l'affichage public ;
-  // `work` (et donc l'état initial transmis à <VisualEditor>) n'est pas
-  // modifié, pour ne rien changer au comportement de l'éditeur.
+  // On normalise uniquement la copie utilisée pour l'affichage ; `work` (et
+  // donc l'état initial transmis à <VisualEditor>) n'est pas modifié.
   // `includeHidden: true` conserve le comportement existant : cette page n'a
   // jamais filtré les médias marqués masqués.
   const chapters = (Array.isArray(work.chapters) ? work.chapters : []).map((chapter) =>
@@ -70,28 +80,28 @@ export default async function Work({ searchParams }: Props) {
   );
 
   return (
-    <PageShell general={work.general}>
-      <div className={state.edit ? "visual-editing" : ""}>
-        <section className="page-hero dark-page" data-section-key="work-hero">
+    <PageShell general={work.general} editable={editable} editBasePath={editBasePath}>
+      <div className={editable ? "visual-editing" : ""}>
+        <section className="page-hero dark-page" {...ea({ "data-section-key": "work-hero" })}>
           <div className="wrap">
-            <p className="eyebrow light" data-edit-key="eyebrow">{work.eyebrow}</p>
-            <h1 data-edit-key="title">{work.title}</h1>
-            <p data-edit-key="intro">{work.intro}</p>
+            <p className="eyebrow light" {...ea({ "data-edit-key": "eyebrow" })}>{work.eyebrow}</p>
+            <h1 {...ea({ "data-edit-key": "title" })}>{work.title}</h1>
+            <p {...ea({ "data-edit-key": "intro" })}>{work.intro}</p>
           </div>
         </section>
 
-        <section className="story-intro section wrap" data-section-key="story">
+        <section className="story-intro section wrap" {...ea({ "data-section-key": "story" })}>
           <div>
-            <p className="section-index" data-edit-key="storyLabel">{work.storyLabel}</p>
-            <h2 data-edit-key="storyTitle">{work.storyTitle}</h2>
+            <p className="section-index" {...ea({ "data-edit-key": "storyLabel" })}>{work.storyLabel}</p>
+            <h2 {...ea({ "data-edit-key": "storyTitle" })}>{work.storyTitle}</h2>
           </div>
           <div>
             <p className="story-date">{displayDate(work.storyDate)}</p>
-            <p data-edit-key="storyText">{work.storyText}</p>
+            <p {...ea({ "data-edit-key": "storyText" })}>{work.storyText}</p>
           </div>
         </section>
 
-        <div data-media-key="storyCoverMediaId" data-alt-key="storyCoverAlt">
+        <div {...ea({ "data-media-key": "storyCoverMediaId", "data-alt-key": "storyCoverAlt" })}>
           {work.storyCoverMediaId ? (
             <img
               className="story-cover cms-image"
@@ -103,30 +113,29 @@ export default async function Work({ searchParams }: Props) {
           )}
         </div>
 
-        <section className="story-flow wrap" data-section-key="chapters">
+        <section className="story-flow wrap" {...ea({ "data-section-key": "chapters" })}>
           {chapters.map((chapter: any, i: number) => (
-            <article className={i % 2 ? "chapter reverse" : "chapter"} data-section-key={`work-chapter:${i}`} key={i}>
+            <article className={i % 2 ? "chapter reverse" : "chapter"} {...ea({ "data-section-key": `work-chapter:${i}` })} key={i}>
               <div className="chapter-copy">
                 <span>0{i + 1}</span>
-                <h2 data-edit-key={`chapters.${i}.title`}>{chapter.title}</h2>
-                <p data-edit-key={`chapters.${i}.text`}>{chapter.text}</p>
+                <h2 {...ea({ "data-edit-key": `chapters.${i}.title` })}>{chapter.title}</h2>
+                <p {...ea({ "data-edit-key": `chapters.${i}.text` })}>{chapter.text}</p>
               </div>
-              <div className="chapter-media" data-gallery-key={`chapters.${i}.media`}>
+              <div className="chapter-media" {...ea({ "data-gallery-key": `chapters.${i}.media` })}>
                 {chapter.media.length ? (
                   chapter.media.map((entry: any, j: number) => (
                     <figure
                       key={`${entry.id}-${j}`}
-                      data-media-key={`chapters.${i}.media.${j}.id`}
-                      data-alt-key={`chapters.${i}.media.${j}.alt`}
+                      {...ea({ "data-media-key": `chapters.${i}.media.${j}.id`, "data-alt-key": `chapters.${i}.media.${j}.alt` })}
                     >
                       <img className="cms-image" src={mediaUrl(entry.id, "desktop")} alt={entry.alt || chapter.title} />
                       {entry.caption && (
-                        <figcaption data-edit-key={`chapters.${i}.media.${j}.caption`}>{entry.caption}</figcaption>
+                        <figcaption {...ea({ "data-edit-key": `chapters.${i}.media.${j}.caption` })}>{entry.caption}</figcaption>
                       )}
                     </figure>
                   ))
                 ) : (
-                  <div data-media-key={`chapters.${i}.media.0.id`}>
+                  <div {...ea({ "data-media-key": `chapters.${i}.media.0.id` })}>
                     <MediaPlaceholder label={chapter.title} ratio={i === 2 || i === 3 ? "portrait" : "landscape"} />
                   </div>
                 )}
@@ -135,26 +144,26 @@ export default async function Work({ searchParams }: Props) {
           ))}
         </section>
 
-        <section className="section dark-section" id="film" data-section-key="film">
+        <section className="section dark-section" id="film" {...ea({ "data-section-key": "film" })}>
           <div className="wrap film-story">
             <div>
               <p className="section-index light">Le film</p>
-              <h2 data-edit-key="filmTitle">{work.filmTitle}</h2>
+              <h2 {...ea({ "data-edit-key": "filmTitle" })}>{work.filmTitle}</h2>
             </div>
-            <div className="film-frame" data-media-key="filmMediaId" data-media-types="video,external_video">
+            <div className="film-frame" {...ea({ "data-media-key": "filmMediaId", "data-media-types": "video,external_video" })}>
               <span className="play">▶</span>
             </div>
           </div>
         </section>
 
         {projects.length > 0 && (
-          <section className="section wrap cms-project-index" data-section-key="projects">
+          <section className="section wrap cms-project-index" {...ea({ "data-section-key": "projects" })}>
             <div className="split-heading">
               <div>
                 <p className="section-index">Histoires publiées</p>
-                <h2 data-edit-key="projectsTitle">{work.projectsTitle}</h2>
+                <h2 {...ea({ "data-edit-key": "projectsTitle" })}>{work.projectsTitle}</h2>
               </div>
-              <p data-edit-key="projectsIntro">{work.projectsIntro}</p>
+              <p {...ea({ "data-edit-key": "projectsIntro" })}>{work.projectsIntro}</p>
             </div>
             <div className="cms-project-grid">
               {projects.map((project) => (
@@ -179,20 +188,20 @@ export default async function Work({ searchParams }: Props) {
           </section>
         )}
 
-        <section className="urban section wrap" data-section-key="urban">
+        <section className="urban section wrap" {...ea({ "data-section-key": "urban" })}>
           <div className="split-heading">
             <div>
-              <p className="section-index" data-edit-key="urbanLabel">{work.urbanLabel}</p>
-              <h2 data-edit-key="urbanTitle">{work.urbanTitle}</h2>
+              <p className="section-index" {...ea({ "data-edit-key": "urbanLabel" })}>{work.urbanLabel}</p>
+              <h2 {...ea({ "data-edit-key": "urbanTitle" })}>{work.urbanTitle}</h2>
             </div>
-            <p data-edit-key="urbanIntro">{work.urbanIntro}</p>
+            <p {...ea({ "data-edit-key": "urbanIntro" })}>{work.urbanIntro}</p>
           </div>
-          <div className="urban-grid" data-gallery-key="urbanGallery">
+          <div className="urban-grid" {...ea({ "data-gallery-key": "urbanGallery" })}>
             {[0, 1, 2].map((i: number) => {
               const entry = work.urbanGallery?.[i];
               const id = typeof entry === "object" ? entry?.id : entry;
               return (
-                <div key={i} data-media-key={`urbanGallery.${i}.id`} data-alt-key={`urbanGallery.${i}.alt`}>
+                <div key={i} {...ea({ "data-media-key": `urbanGallery.${i}.id`, "data-alt-key": `urbanGallery.${i}.alt` })}>
                   {id ? (
                     <img className="cms-image" src={mediaUrl(id, "desktop")} alt={entry?.alt || work.urbanTitle} />
                   ) : (
@@ -205,24 +214,17 @@ export default async function Work({ searchParams }: Props) {
           <Link
             className="button button-dark"
             href={work.urbanCtaUrl}
-            data-link-label-key="urbanCta"
-            data-link-url-key="urbanCtaUrl"
+            {...ea({ "data-link-label-key": "urbanCta", "data-link-url-key": "urbanCtaUrl" })}
           >
-            <span data-edit-key="urbanCta">{work.urbanCta}</span>
+            <span {...ea({ "data-edit-key": "urbanCta" })}>{work.urbanCta}</span>
           </Link>
         </section>
       </div>
-
-      {state.user && (state.edit || state.preview) && (
-        <VisualEditor
-          pageKey="work"
-          initial={work}
-          media={state.media}
-          preview={state.preview}
-          editUrl="/notre-travail"
-          previewUrl="/notre-travail?preview=1"
-        />
-      )}
     </PageShell>
   );
+}
+
+export default async function Work() {
+  const { work, projects } = await loadWorkPublished();
+  return <WorkBody work={work} projects={projects} />;
 }

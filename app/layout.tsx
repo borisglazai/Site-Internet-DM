@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import "./visual-editor.css";
+// visual-editor.css n'est chargé que par app/admin/editor/layout.tsx : le
+// site public ne doit jamais recevoir le CSS ni les affordances de l'éditeur
+// (voir app/admin/editor/layout.tsx).
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://divine-motion-studio.chatgpt.site"),

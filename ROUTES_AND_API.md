@@ -4,14 +4,15 @@
 
 | Route | Accès | Fonction et données |
 |---|---|---|
-| `/` | Public ; édition si admin | Accueil, paramètres `home/general`, projets publiés, brouillon `visual_draft_home` en édition |
-| `/notre-travail` | Public ; édition si admin | Portfolio, `work/general`, projets publiés |
-| `/services` | Public ; édition si admin | `services_page`, table `services`, `general` |
-| `/a-propos` | Public ; édition si admin | `about`, table `team_members`, `general` |
-| `/contact` | Public ; édition si admin | `contact/general` et formulaire client |
-| `/projets/[slug]` | Projet publié ; brouillon accessible à l’admin | Projet, chapitres, galerie, vidéos, SEO |
-| `/admin` | Identité ChatGPT + email autorisé | CMS complet ; sinon connexion/refus |
-| `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback` | Plateforme | Routes réservées au flux d’identité, non implémentées dans le dépôt |
+| `/` | Public, toujours contenu publié | Accueil, paramètres `home/general`, projets publiés |
+| `/notre-travail` | Public, toujours contenu publié | Portfolio, `work/general`, projets publiés |
+| `/services` | Public, toujours contenu publié | `services_page`, table `services`, `general` |
+| `/a-propos` | Public, toujours contenu publié | `about`, table `team_members`, `general` |
+| `/contact` | Public, toujours contenu publié | `contact/general` et formulaire client |
+| `/projets/[slug]` | Public, toujours contenu publié | Projet, chapitres, galerie, vidéos, SEO |
+| `/admin` | Admin (SIWC ou Cloudflare Access selon l’environnement) | CMS complet ; sinon connexion/refus |
+| `/admin/editor`, `/admin/editor/notre-travail`, `/admin/editor/services`, `/admin/editor/a-propos`, `/admin/editor/contact`, `/admin/editor/projets/[slug]` | Admin (même vérification que `/admin`, voir `lib/admin-auth.ts`) | Éditeur visuel — même composant de rendu que la page publique correspondante, avec brouillon `visual_draft_<pageKey>` et attributs d’édition (`data-edit-key`, etc.) actifs |
+| `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback` | Plateforme | Routes réservées au flux d’identité SIWC, non implémentées dans le dépôt |
 
 ## API
 
@@ -26,7 +27,6 @@
 | `POST /api/admin/media` multipart | Admin | Stocke variantes R2, finalise ou remplace métadonnées D1 |
 | `PATCH /api/admin/media` | Admin | Modifie métadonnées, catégorie, visibilité et rattachement projet |
 | `DELETE /api/admin/media?id=&force=` | Admin | Détection d’usage puis suppression logique |
-| `GET /api/admin/editor-session?action=&return=&json=` | Admin | Active ou supprime le cookie global d’édition ; redirige ou répond JSON |
 | `POST /api/admin/visual-editor` | Admin | Actions `save`, `discard`, `publish`, `restore` sur une page ou un projet |
 
 Toutes les API admin nécessitent un utilisateur authentifié dont l’email figure dans `ADMIN_EMAILS`. Aucun rôle différencié n’est appliqué. Les entrées sont nettoyées par longueur et quelques listes fermées, mais il n’existe pas de schéma Zod global.

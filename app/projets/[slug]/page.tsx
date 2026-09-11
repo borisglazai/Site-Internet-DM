@@ -1,23 +1,144 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getAuthorizedAdmin } from "../../../lib/admin-auth";
-import { db } from "../../../lib/cms-db";
-import { displayDate, mediaUrl, publishedProject } from "../../../lib/public-cms";
-import { visualContent } from "../../../lib/visual-editor";
-import { getEditorState } from "../../../lib/editor-session";
-import { setting } from "../../../lib/public-cms";
+import { displayDate, mediaUrl, publishedProject, setting } from "../../../lib/public-cms";
 import { MediaPlaceholder, PageShell } from "../../site-components";
-import { VisualEditor } from "../../visual-editor";
-export const dynamic="force-dynamic";
-type Props={params:Promise<{slug:string}>;searchParams:Promise<{preview?:string;edit?:string}>};
-export async function generateMetadata({params,searchParams}:Props):Promise<Metadata>{const {slug}=await params,query=await searchParams,user=await getAuthorizedAdmin(),privateView=Boolean(user)&&(query.preview==="1"||query.edit==="1"),project=await publishedProject(slug,privateView);if(!project)return {};return {title:project.seoTitle||project.title,description:project.seoDescription||project.excerpt,robots:privateView?{index:false,follow:false}:undefined,openGraph:project.seoImageMediaId?{images:[mediaUrl(project.seoImageMediaId,"desktop")]}:undefined}}
-export default async function ProjectPage({params,searchParams}:Props){
-  const {slug}=await params,query=await searchParams,state=await getEditorState(query.preview==="1"),user=state.user||await getAuthorizedAdmin(),edit=state.edit||(query.edit==="1"&&Boolean(user)),preview=state.preview,published=await publishedProject(slug,edit||preview);if(!published)notFound();
-  const general=await setting("general",{}),initial={...published,status:"published",visible:true,general,sections:published.sections.map((section:any)=>({sectionKey:section.section_key||section.sectionKey,title:section.title,intro:section.intro,media:section.media||[],videos:section.videos||[],enabled:section.enabled!==0}))},project=await visualContent(`project_${published.id}`,initial,edit||preview),title=project.peopleNames||project.title,media=user&&(edit||preview)?await editorMedia():[];
-  return <PageShell general={project.general}>{preview&&<div className="preview-banner">Prévisualisation privée — aucune modification n’est publiée</div>}<main className={edit?"visual-editing":""}>
-    <section className="story-intro section wrap" data-section-key="project-intro" data-section-locked="true"><div><p className="section-index" data-edit-key="category">{project.category}</p><h1 data-edit-key={project.peopleNames?"peopleNames":"title"}>{title}</h1></div><div><p className="story-date">{displayDate(project.projectDate)}</p><p data-edit-key="excerpt">{project.excerpt}</p>{project.location&&<p data-edit-key="location">{project.location}</p>}</div></section>
-    <div data-media-key="coverMediaId">{project.coverMediaId?<img className="story-cover cms-image" src={mediaUrl(project.coverMediaId,"desktop")} alt={title}/>:<MediaPlaceholder className="story-cover" label={title} ratio="landscape"/>}</div>
-    <section className="story-flow wrap" data-section-key="project-chapters">{project.sections?.length?project.sections.map((section:any,index:number)=>section.enabled===false&&!edit?null:<article className={index%2?"chapter reverse":"chapter"} data-section-key={`chapter:${index}`} key={section.id||section.sectionKey||index}><div className="chapter-copy"><span>{String(index+1).padStart(2,"0")}</span><h2 data-edit-key={`sections.${index}.title`}>{section.title||section.sectionKey}</h2><p data-edit-key={`sections.${index}.intro`}>{section.intro}</p></div><div className="chapter-media" data-gallery-key={`sections.${index}.media`}>{(section.media||[]).map((entry:any,mediaIndex:number)=><figure key={`${entry.id}-${mediaIndex}`} data-media-key={`sections.${index}.media.${mediaIndex}.id`} data-alt-key={`sections.${index}.media.${mediaIndex}.alt`}><img className="cms-image" src={mediaUrl(entry.id,"desktop")} alt={entry.alt||section.title||title}/>{entry.caption&&<figcaption data-edit-key={`sections.${index}.media.${mediaIndex}.caption`}>{entry.caption}</figcaption>}</figure>)}{!(section.media||[]).length&&<div data-media-key={`sections.${index}.media.0.id`}><MediaPlaceholder label={section.title||section.sectionKey} ratio={index%3===2?"portrait":"landscape"}/></div>}</div></article>):<article className="chapter"><div className="chapter-copy"><span>01</span><h2 data-edit-key="title">{project.title}</h2><p data-edit-key="description">{project.description}</p></div><div className="chapter-media" data-gallery-key="gallery">{project.gallery.map((entry:any,index:number)=><figure key={`${entry.id}-${index}`} data-media-key={`gallery.${index}.id`} data-alt-key={`gallery.${index}.alt`}><img className="cms-image" src={mediaUrl(entry.id,"desktop")} alt={entry.alt||title}/>{entry.caption&&<figcaption data-edit-key={`gallery.${index}.caption`}>{entry.caption}</figcaption>}</figure>)}</div></article>}</section>{project.videos?.[0]&&<section className="section dark-section" data-section-key="project-film"><div className="wrap film-story"><h2>Le film</h2><div className="film-frame" data-media-key="videos.0.mediaId" data-media-types="video,external_video"><span className="play">▶</span></div></div></section>}
-  </main>{user&&(edit||preview)&&<VisualEditor pageKey={`project_${project.id}`} initial={project} media={media as any[]} preview={preview} editUrl={`/projets/${slug}`} previewUrl={`/projets/${slug}?preview=1`}/>}</PageShell>;
+
+export const dynamic = "force-dynamic";
+type Params = { params: Promise<{ slug: string }> };
+
+export async function generateMetadata({ params }: Params): Promise<Metadata> {
+  const { slug } = await params;
+  const project = await publishedProject(slug);
+  if (!project) return {};
+  return {
+    title: project.seoTitle || project.title,
+    description: project.seoDescription || project.excerpt,
+    openGraph: project.seoImageMediaId ? { images: [mediaUrl(project.seoImageMediaId, "desktop")] } : undefined,
+  };
 }
-async function editorMedia(){const result=await db().prepare("SELECT * FROM media WHERE deleted_at IS NULL AND visible=1 ORDER BY updated_at DESC LIMIT 500").all();return result.results||[]}
+
+export async function loadProjectPublished(slug: string, includeDraft = false) {
+  const published = await publishedProject(slug, includeDraft);
+  if (!published) return null;
+  const general = await setting("general", {});
+  return {
+    ...published,
+    status: "published",
+    visible: true,
+    general,
+    sections: published.sections.map((section: any) => ({
+      sectionKey: section.section_key || section.sectionKey,
+      title: section.title,
+      intro: section.intro,
+      media: section.media || [],
+      videos: section.videos || [],
+      enabled: section.enabled !== 0,
+    })),
+  };
+}
+
+// Rendu partagé entre la page projet publique (editable=false) et l'éditeur
+// visuel protégé sous /admin/editor/projets/[slug] (editable=true).
+export function ProjectBody({
+  project,
+  editable = false,
+  preview = false,
+  editBasePath,
+}: {
+  project: Record<string, any>;
+  editable?: boolean;
+  preview?: boolean;
+  editBasePath?: string;
+}) {
+  const ea = (attrs: Record<string, string>) => (editable ? attrs : {});
+  const title = project.peopleNames || project.title;
+  return (
+    <PageShell general={project.general} editable={editable} editBasePath={editBasePath}>
+      {preview && <div className="preview-banner">Prévisualisation privée — aucune modification n’est publiée</div>}
+      <main className={editable ? "visual-editing" : ""}>
+        <section className="story-intro section wrap" {...ea({ "data-section-key": "project-intro", "data-section-locked": "true" })}>
+          <div>
+            <p className="section-index" {...ea({ "data-edit-key": "category" })}>{project.category}</p>
+            <h1 {...ea({ "data-edit-key": project.peopleNames ? "peopleNames" : "title" })}>{title}</h1>
+          </div>
+          <div>
+            <p className="story-date">{displayDate(project.projectDate)}</p>
+            <p {...ea({ "data-edit-key": "excerpt" })}>{project.excerpt}</p>
+            {project.location && <p {...ea({ "data-edit-key": "location" })}>{project.location}</p>}
+          </div>
+        </section>
+
+        <div {...ea({ "data-media-key": "coverMediaId" })}>
+          {project.coverMediaId ? (
+            <img className="story-cover cms-image" src={mediaUrl(project.coverMediaId, "desktop")} alt={title} />
+          ) : (
+            <MediaPlaceholder className="story-cover" label={title} ratio="landscape" />
+          )}
+        </div>
+
+        <section className="story-flow wrap" {...ea({ "data-section-key": "project-chapters" })}>
+          {project.sections?.length ? (
+            project.sections.map((section: any, index: number) =>
+              section.enabled === false && !editable ? null : (
+                <article className={index % 2 ? "chapter reverse" : "chapter"} {...ea({ "data-section-key": `chapter:${index}` })} key={section.id || section.sectionKey || index}>
+                  <div className="chapter-copy">
+                    <span>{String(index + 1).padStart(2, "0")}</span>
+                    <h2 {...ea({ "data-edit-key": `sections.${index}.title` })}>{section.title || section.sectionKey}</h2>
+                    <p {...ea({ "data-edit-key": `sections.${index}.intro` })}>{section.intro}</p>
+                  </div>
+                  <div className="chapter-media" {...ea({ "data-gallery-key": `sections.${index}.media` })}>
+                    {(section.media || []).map((entry: any, mediaIndex: number) => (
+                      <figure key={`${entry.id}-${mediaIndex}`} {...ea({ "data-media-key": `sections.${index}.media.${mediaIndex}.id`, "data-alt-key": `sections.${index}.media.${mediaIndex}.alt` })}>
+                        <img className="cms-image" src={mediaUrl(entry.id, "desktop")} alt={entry.alt || section.title || title} />
+                        {entry.caption && <figcaption {...ea({ "data-edit-key": `sections.${index}.media.${mediaIndex}.caption` })}>{entry.caption}</figcaption>}
+                      </figure>
+                    ))}
+                    {!(section.media || []).length && (
+                      <div {...ea({ "data-media-key": `sections.${index}.media.0.id` })}>
+                        <MediaPlaceholder label={section.title || section.sectionKey} ratio={index % 3 === 2 ? "portrait" : "landscape"} />
+                      </div>
+                    )}
+                  </div>
+                </article>
+              ),
+            )
+          ) : (
+            <article className="chapter">
+              <div className="chapter-copy">
+                <span>01</span>
+                <h2 {...ea({ "data-edit-key": "title" })}>{project.title}</h2>
+                <p {...ea({ "data-edit-key": "description" })}>{project.description}</p>
+              </div>
+              <div className="chapter-media" {...ea({ "data-gallery-key": "gallery" })}>
+                {project.gallery.map((entry: any, index: number) => (
+                  <figure key={`${entry.id}-${index}`} {...ea({ "data-media-key": `gallery.${index}.id`, "data-alt-key": `gallery.${index}.alt` })}>
+                    <img className="cms-image" src={mediaUrl(entry.id, "desktop")} alt={entry.alt || title} />
+                    {entry.caption && <figcaption {...ea({ "data-edit-key": `gallery.${index}.caption` })}>{entry.caption}</figcaption>}
+                  </figure>
+                ))}
+              </div>
+            </article>
+          )}
+        </section>
+
+        {project.videos?.[0] && (
+          <section className="section dark-section" {...ea({ "data-section-key": "project-film" })}>
+            <div className="wrap film-story">
+              <h2>Le film</h2>
+              <div className="film-frame" {...ea({ "data-media-key": "videos.0.mediaId", "data-media-types": "video,external_video" })}>
+                <span className="play">▶</span>
+              </div>
+            </div>
+          </section>
+        )}
+      </main>
+    </PageShell>
+  );
+}
+
+export default async function ProjectPage({ params }: Params) {
+  const { slug } = await params;
+  const project = await loadProjectPublished(slug);
+  if (!project) notFound();
+  return <ProjectBody project={project} />;
+}

@@ -5,7 +5,8 @@ divine-motion-audit-package/
 ├── app/                         Pages, layouts, composants et Route Handlers
 │   ├── admin/                   CMS client, médiathèque, gestion de projets
 │   ├── api/                     API publiques et protégées
-│   ├── projets/[slug]/          Page publique/d’édition d’un projet
+│   ├── admin/editor/            Éditeur visuel protégé (Access), même rendu que le site public
+│   ├── projets/[slug]/          Page publique d’un projet
 │   ├── a-propos/                Page À propos
 │   ├── contact/                 Page et formulaire de demande
 │   ├── notre-travail/           Portfolio
@@ -18,8 +19,7 @@ divine-motion-audit-package/
 ├── lib/                         Accès CMS, auth, session et publication
 │   ├── admin-auth.ts            Allowlist administrateurs
 │   ├── cms-db.ts                Bindings D1/R2 et utilitaires SQL
-│   ├── editor-page.ts           Assemblage page + brouillon + médias
-│   ├── editor-session.ts        Cookie persistant du mode édition
+│   ├── editor-page.ts           Médias disponibles pour l’éditeur protégé
 │   ├── public-cms.ts            Lectures publiques et SEO
 │   └── visual-editor.ts         Brouillon, publication, restauration
 ├── db/                          Déclarations Drizzle et connexion D1
@@ -43,9 +43,9 @@ divine-motion-audit-package/
 
 ## Flux principaux
 
-- Public : page App Router → `lib/public-cms.ts` → D1 → rendu React ; médias via `/api/media/[id]` → R2.
+- Public : page App Router → `lib/public-cms.ts` → D1 → rendu React (sans aucun attribut d’édition) ; médias via `/api/media/[id]` → R2.
 - CMS : `/admin` → composants client → `/api/admin/cms` ou `/api/admin/media` → D1/R2 + `audit_log`.
-- Éditeur : page publique → `editorPage()`/`getEditorState()` → `VisualEditor` → `/api/admin/visual-editor` → brouillon/publication D1.
+- Éditeur : `/admin/editor/**` (protégé par `getAuthorizedAdmin()`, Cloudflare Access ou SIWC selon l’environnement) → même composant de rendu que la page publique correspondante, avec `editable=true` → `VisualEditor` → `/api/admin/visual-editor` → brouillon/publication D1.
 - Contact : `InquiryForm` → `POST /api/inquiries` → table `inquiries` → écran Demandes du CMS.
 
 Les artefacts `node_modules`, `.next`, `dist`, caches, journaux Wrangler et dépôt `.git` ne font pas partie de l’archive.

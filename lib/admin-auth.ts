@@ -122,7 +122,7 @@ export async function requireAdmin(): Promise<CurrentUser> {
   return user;
 }
 
-// Alias conservés pour ne pas toucher aux appels existants (app/**, lib/editor-session.ts) :
+// Alias conservés pour ne pas toucher aux appels existants (app/**) :
 // même comportement, nouveaux noms recommandés pour le code futur.
 export const requireAdminApi = requireAdmin;
 
