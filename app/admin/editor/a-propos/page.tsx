@@ -1,4 +1,4 @@
-import { visualContent } from "../../../../lib/visual-editor";
+import { visualContent, hasDraft } from "../../../../lib/visual-editor";
 import { editorMedia } from "../../../../lib/editor-page";
 import { AboutBody, loadAboutPublished } from "../../../a-propos/page";
 import { VisualEditor } from "../../../visual-editor";
@@ -12,7 +12,7 @@ export default async function AboutEditorPage({ searchParams }: Props) {
   const isPreview = query.preview === "1";
   const published = await loadAboutPublished();
   const about = await visualContent("about", published, true);
-  const media = await editorMedia();
+  const [media, draftExists] = await Promise.all([editorMedia(), hasDraft("about")]);
   return (
     <>
       <AboutBody about={about} editable={!isPreview} editBasePath="/admin/editor" />
@@ -23,6 +23,8 @@ export default async function AboutEditorPage({ searchParams }: Props) {
         preview={isPreview}
         editUrl="/admin/editor/a-propos"
         previewUrl="/admin/editor/a-propos?preview=1"
+        pageLabel="À propos"
+        hasDraft={draftExists}
       />
     </>
   );

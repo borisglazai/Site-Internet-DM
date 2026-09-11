@@ -1,4 +1,4 @@
-import { visualContent } from "../../../../lib/visual-editor";
+import { visualContent, hasDraft } from "../../../../lib/visual-editor";
 import { editorMedia } from "../../../../lib/editor-page";
 import { ServicesBody, loadServicesPublished } from "../../../services/page";
 import { VisualEditor } from "../../../visual-editor";
@@ -12,7 +12,7 @@ export default async function ServicesEditorPage({ searchParams }: Props) {
   const isPreview = query.preview === "1";
   const published = await loadServicesPublished();
   const page = await visualContent("services", published, true);
-  const media = await editorMedia();
+  const [media, draftExists] = await Promise.all([editorMedia(), hasDraft("services")]);
   return (
     <>
       <ServicesBody page={page} editable={!isPreview} editBasePath="/admin/editor" />
@@ -23,6 +23,8 @@ export default async function ServicesEditorPage({ searchParams }: Props) {
         preview={isPreview}
         editUrl="/admin/editor/services"
         previewUrl="/admin/editor/services?preview=1"
+        pageLabel="Services"
+        hasDraft={draftExists}
       />
     </>
   );

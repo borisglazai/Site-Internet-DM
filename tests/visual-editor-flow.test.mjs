@@ -197,3 +197,44 @@ test("7. régression : un brouillon incomplet ne fait pas planter la prévisuali
     body: JSON.stringify({ pageKey: "work", action: "discard" }),
   });
 });
+
+// --- Phase UX 1 : non-régression sur la barre et la navigation de l'éditeur ---
+
+test("8. la barre affiche le nom de la page et le statut Publié par défaut", async () => {
+  const cases = [
+    ["/admin/editor", "Accueil"],
+    ["/admin/editor/notre-travail", "Notre travail"],
+    ["/admin/editor/services", "Services"],
+    ["/admin/editor/a-propos", "À propos"],
+    ["/admin/editor/contact", "Contact"],
+  ];
+  for (const [path, label] of cases) {
+    const { text } = await get(path, AUTH_HEADERS);
+    assert.ok(text.includes(`Divine Motion — <!-- -->${label}`), `${path} doit afficher le libellé "${label}" dans la barre`);
+    assert.ok(text.includes("Publié</small>"), `${path} doit afficher le statut "Publié" sans brouillon en attente`);
+  }
+});
+
+test("9. le sélecteur de page reste toujours dans /admin/editor/* et marque la page actuelle", async () => {
+  const { text } = await get("/admin/editor/services", AUTH_HEADERS);
+  assert.ok(text.includes('class="ve-page-select"'), "le sélecteur de page doit être présent");
+  for (const href of ["/admin/editor", "/admin/editor/notre-travail", "/admin/editor/services", "/admin/editor/a-propos", "/admin/editor/contact"]) {
+    assert.ok(text.includes(`value="${href}"`), `le sélecteur doit proposer ${href}`);
+  }
+  assert.ok(text.includes('value="/admin/editor/services" selected'), "la page actuelle doit être présélectionnée");
+});
+
+test("10. le statut reflète un brouillon existant à l'ouverture de l'éditeur", async () => {
+  await fetch(`${baseUrl}/api/admin/visual-editor`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...AUTH_HEADERS },
+    body: JSON.stringify({ pageKey: "contact", action: "save", content: { eyebrow: "x", title: "x" } }),
+  });
+  const { text } = await get("/admin/editor/contact", AUTH_HEADERS);
+  assert.ok(text.includes("Brouillon enregistré</small>"), "un brouillon existant doit afficher \"Brouillon enregistré\" dès le chargement");
+  await fetch(`${baseUrl}/api/admin/visual-editor`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...AUTH_HEADERS },
+    body: JSON.stringify({ pageKey: "contact", action: "discard" }),
+  });
+});

@@ -1,5 +1,5 @@
 import { setting, publishedProjects } from "../../../lib/public-cms";
-import { visualContent } from "../../../lib/visual-editor";
+import { visualContent, hasDraft } from "../../../lib/visual-editor";
 import { editorMedia } from "../../../lib/editor-page";
 import { HomeBody, homeExtendedDefaults } from "../../page";
 import { VisualEditor } from "../../visual-editor";
@@ -14,7 +14,7 @@ export default async function HomeEditorPage({ searchParams }: Props) {
   const publishedStored = await setting("home", homeExtendedDefaults);
   const published = { ...homeExtendedDefaults, ...publishedStored, general: await setting("general", {}) };
   const home = await visualContent("home", published, true);
-  const [projects, media] = await Promise.all([publishedProjects(), editorMedia()]);
+  const [projects, media, draftExists] = await Promise.all([publishedProjects(), editorMedia(), hasDraft("home")]);
   return (
     <>
       <HomeBody home={home} projects={projects} editable={!isPreview} editBasePath="/admin/editor" />
@@ -25,6 +25,8 @@ export default async function HomeEditorPage({ searchParams }: Props) {
         preview={isPreview}
         editUrl="/admin/editor"
         previewUrl="/admin/editor?preview=1"
+        pageLabel="Accueil"
+        hasDraft={draftExists}
       />
     </>
   );

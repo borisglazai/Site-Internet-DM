@@ -1,5 +1,5 @@
 import { setting, publishedProjects } from "../../../../lib/public-cms";
-import { visualContent } from "../../../../lib/visual-editor";
+import { visualContent, hasDraft } from "../../../../lib/visual-editor";
 import { editorMedia } from "../../../../lib/editor-page";
 import { WorkBody, workDefaults } from "../../../notre-travail/page";
 import { VisualEditor } from "../../../visual-editor";
@@ -14,7 +14,7 @@ export default async function WorkEditorPage({ searchParams }: Props) {
   const stored = await setting("work", workDefaults);
   const published = { ...workDefaults, ...stored, general: await setting("general", {}) };
   const work = await visualContent("work", published, true);
-  const [projects, media] = await Promise.all([publishedProjects(), editorMedia()]);
+  const [projects, media, draftExists] = await Promise.all([publishedProjects(), editorMedia(), hasDraft("work")]);
   return (
     <>
       <WorkBody work={work} projects={projects} editable={!isPreview} editBasePath="/admin/editor" />
@@ -25,6 +25,8 @@ export default async function WorkEditorPage({ searchParams }: Props) {
         preview={isPreview}
         editUrl="/admin/editor/notre-travail"
         previewUrl="/admin/editor/notre-travail?preview=1"
+        pageLabel="Notre travail"
+        hasDraft={draftExists}
       />
     </>
   );

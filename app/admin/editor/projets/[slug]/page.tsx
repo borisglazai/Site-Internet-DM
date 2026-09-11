@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { visualContent } from "../../../../../lib/visual-editor";
+import { visualContent, hasDraft } from "../../../../../lib/visual-editor";
 import { editorMedia } from "../../../../../lib/editor-page";
 import { ProjectBody, loadProjectPublished } from "../../../../projets/[slug]/page";
 import { VisualEditor } from "../../../../visual-editor";
@@ -17,7 +17,7 @@ export default async function ProjectEditorPage({ params, searchParams }: Props)
   const published = await loadProjectPublished(slug, true);
   if (!published) notFound();
   const project = await visualContent(`project_${published.id}`, published, true);
-  const media = await editorMedia();
+  const [media, draftExists] = await Promise.all([editorMedia(), hasDraft(`project_${published.id}`)]);
   return (
     <>
       <ProjectBody project={project} editable={!isPreview} preview={isPreview} editBasePath="/admin/editor" />
@@ -28,6 +28,8 @@ export default async function ProjectEditorPage({ params, searchParams }: Props)
         preview={isPreview}
         editUrl={`/admin/editor/projets/${slug}`}
         previewUrl={`/admin/editor/projets/${slug}?preview=1`}
+        pageLabel={project.peopleNames || project.title}
+        hasDraft={draftExists}
       />
     </>
   );

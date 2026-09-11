@@ -26,6 +26,17 @@ export async function visualContent<T extends VisualContent>(
   return row ? parseJson(row.value, published) : published;
 }
 
+/**
+ * Indique si un brouillon non publié existe pour cette page — utilisé
+ * uniquement pour afficher le bon statut initial dans la barre de l'éditeur
+ * visuel ("Publié" vs "Brouillon enregistré", voir app/visual-editor.tsx).
+ * Lecture seule, sans effet sur `visualContent()`.
+ */
+export async function hasDraft(pageKey: string): Promise<boolean> {
+  const row = await db().prepare("SELECT 1 FROM cms_settings WHERE key=?").bind(draftKey(pageKey)).first();
+  return Boolean(row);
+}
+
 export async function saveVisualDraft(pageKey: string, content: VisualContent, userEmail: string) {
   const value = JSON.stringify(content);
   if (value.length > 180000) throw new Error("Le brouillon est trop volumineux.");
