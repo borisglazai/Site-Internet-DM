@@ -102,6 +102,9 @@ test("1. une page publique normale ne contient aucun état visuel d'édition", a
     assert.ok(!text.includes("data-media-key"), `${path} ne doit porter aucun attribut data-media-key`);
     assert.ok(!text.includes("data-section-key"), `${path} ne doit porter aucun attribut data-section-key`);
     assert.ok(!text.includes("data-position-key"), `${path} ne doit porter aucun attribut data-position-key`);
+    assert.ok(!text.includes("data-alt-key"), `${path} ne doit porter aucun attribut data-alt-key`);
+    assert.ok(!text.includes("data-gallery-key"), `${path} ne doit porter aucun attribut data-gallery-key`);
+    assert.ok(!text.includes("ve-hidden-section"), `${path} ne doit porter aucune classe d'éditeur ve-hidden-section`);
     assert.ok(!text.includes("ve-bar"), `${path} ne doit pas charger la barre d'outils de l'éditeur`);
   }
 });
@@ -282,4 +285,87 @@ test("13. « Abandonner le brouillon » n'est plus une action de premier niveau"
   // dans le menu secondaire "⋯" (rendu uniquement une fois ouvert côté client).
   assert.ok(!text.includes(">Abandonner le brouillon<"), "le bouton ne doit pas être exposé directement dans la barre");
   assert.ok(text.includes('aria-label="Plus d’actions"'), "le déclencheur du menu secondaire doit être présent");
+});
+
+// --- Phase UX 2 complète : média hero (alt), sections réellement masquables,
+// réorganisation de galerie ---
+// Note : le panneau latéral (aside/média/galerie) est de l'état client pur,
+// jamais rendu côté serveur (il part de `useState(null)`) — ces comportements
+// interactifs sont donc couverts par tests/editor-panel-helpers.test.ts
+// (mediaLabel, sectionLabel, sectionBounds) plutôt qu'ici. Ce fichier vérifie
+// ce qui est observable côté HTTP : persistance brouillon/publication et
+// rendu public/éditeur qui en résulte.
+
+const heroAltDraft = { ...cropDraft, heroMediaAlt: "Texte alternatif hero test" };
+
+test("14. le texte alternatif du hero persiste en brouillon et se publie fidèlement", async () => {
+  await postVisualEditor("save", heroAltDraft);
+  const editor = await get("/admin/editor", AUTH_HEADERS);
+  assert.ok(editor.text.includes('alt="Texte alternatif hero test"'), "l'éditeur doit refléter l'alt du brouillon");
+  await postVisualEditor("publish", heroAltDraft);
+  const pub = await get("/");
+  assert.ok(pub.text.includes('alt="Texte alternatif hero test"'), "le site public doit refléter l'alt publié");
+});
+
+async function postWork(action, content) {
+  const response = await fetch(`${baseUrl}/api/admin/visual-editor`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...AUTH_HEADERS },
+    body: JSON.stringify({ pageKey: "work", action, content }),
+  });
+  const json = await response.json();
+  assert.equal(response.ok, true, `action ${action} (work) devrait réussir : ${JSON.stringify(json)}`);
+  return json;
+}
+
+const workBaseDraft = {
+  eyebrow: "x", title: "x", intro: "x",
+  storyLabel: "x", storyTitle: "SECTION MASQUEE TEST", storyDate: "2026-01-01", storyText: "x",
+  chapters: [], filmTitle: "x", projectsTitle: "x", projectsIntro: "x",
+  urbanLabel: "x", urbanTitle: "x", urbanIntro: "x", urbanGallery: [], urbanCta: "x", urbanCtaUrl: "/contact",
+};
+
+test("15. « Masquer » une section sur Notre travail la retire réellement du site public (correctif hiddenSections)", async () => {
+  // Avant Phase UX 2, `hiddenSections` était déclaré sur cette page mais
+  // jamais relu au rendu : "Masquer" n'avait donc aucun effet visible ni
+  // public (voir l'audit). Ce test échoue si la régression revient.
+  await postWork("save", { ...workBaseDraft, hiddenSections: ["story"] });
+  const editor = await get("/admin/editor/notre-travail", AUTH_HEADERS);
+  assert.ok(editor.text.includes("SECTION MASQUEE TEST"), "la section masquée doit rester visible dans l'éditeur");
+  assert.ok(
+    editor.text.includes('class="story-intro section wrap ve-hidden-section"'),
+    "la section masquée doit être visuellement identifiable (atténuée) dans l'éditeur",
+  );
+  await postWork("publish", { ...workBaseDraft, hiddenSections: ["story"] });
+  const pub = await get("/notre-travail");
+  assert.equal(pub.response.status, 200);
+  // On vérifie l'absence de la structure DOM réelle de la section (sa classe
+  // dédiée `story-intro`), pas seulement du texte : en mode développement,
+  // le flux RSC intègre les props complètes reçues par le composant serveur
+  // à des fins de traçage React DevTools, ce qui ferait apparaître le texte
+  // même quand la section correspondante n'a jamais été rendue dans le DOM.
+  assert.ok(!pub.text.includes('class="story-intro'), "le site public ne doit plus rendre la section masquée");
+});
+
+test("16. « Afficher » une section précédemment masquée la restaure sur le site public", async () => {
+  await postWork("publish", { ...workBaseDraft, hiddenSections: [] });
+  const pub = await get("/notre-travail");
+  assert.ok(pub.text.includes('class="story-intro section wrap"'), "réafficher la section doit la restaurer sur le site public");
+  assert.ok(pub.text.includes("SECTION MASQUEE TEST"), "le contenu de la section restaurée doit être visible");
+});
+
+test("17. réorganiser la galerie urbaine persiste le nouvel ordre et se reflète fidèlement", async () => {
+  const ordered = { ...workBaseDraft, hiddenSections: [], urbanGallery: [{ id: 101, alt: "Un" }, { id: 102, alt: "Deux" }] };
+  await postWork("save", ordered);
+  const before = await get("/admin/editor/notre-travail", AUTH_HEADERS);
+  const firstBefore = before.text.indexOf("/api/media/101");
+  const secondBefore = before.text.indexOf("/api/media/102");
+  assert.ok(firstBefore > -1 && secondBefore > -1 && firstBefore < secondBefore, "l'ordre initial doit placer 101 avant 102");
+
+  const reordered = { ...ordered, urbanGallery: [{ id: 102, alt: "Deux" }, { id: 101, alt: "Un" }] };
+  await postWork("save", reordered);
+  const after = await get("/admin/editor/notre-travail", AUTH_HEADERS);
+  const firstAfter = after.text.indexOf("/api/media/101");
+  const secondAfter = after.text.indexOf("/api/media/102");
+  assert.ok(secondAfter > -1 && firstAfter > -1 && secondAfter < firstAfter, "la réorganisation doit inverser l'ordre affiché");
 });

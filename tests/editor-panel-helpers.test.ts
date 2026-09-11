@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { mediaLabel } from "../lib/media-label.ts";
-import { sectionBounds, sectionOrder } from "../lib/section-order.ts";
+import { sectionBounds, sectionOrder, sectionLabel } from "../lib/section-order.ts";
 
 test("mediaLabel() donne un libellé contextuel selon la zone", () => {
   assert.equal(mediaLabel("heroMediaId"), "Image hero");
@@ -13,6 +13,23 @@ test("mediaLabel() donne un libellé contextuel selon la zone", () => {
   assert.equal(mediaLabel("chapters.0.media.1.id"), "Photo de chapitre");
   assert.equal(mediaLabel("customSections.0.mediaIds.0"), "Média de section");
   assert.equal(mediaLabel("une-clef-inconnue"), "Média sélectionné");
+});
+
+test("mediaLabel() distingue Image hero et Vidéo hero selon les types déclarés", () => {
+  assert.equal(mediaLabel("heroMediaId", ["image"]), "Image hero");
+  assert.equal(mediaLabel("heroMediaId", ["video", "external_video"]), "Vidéo hero");
+  assert.equal(mediaLabel("heroMediaId"), "Image hero", "sans types, on reste sur le libellé image par défaut");
+});
+
+test("sectionLabel() donne un titre de panneau contextuel et lisible", () => {
+  assert.equal(sectionLabel("hero"), "Hero");
+  assert.equal(sectionLabel("services"), "Services");
+  assert.equal(sectionLabel("chapter:0"), "Chapitre 1");
+  assert.equal(sectionLabel("chapter:3"), "Chapitre 4");
+  assert.equal(sectionLabel("service:0"), "Service");
+  assert.equal(sectionLabel("team:0"), "Membre de l’équipe");
+  assert.equal(sectionLabel("custom:abc-123"), "Section personnalisée");
+  assert.equal(sectionLabel("une-clef-inconnue"), "Section");
 });
 
 test("sectionOrder() retombe sur l'ordre par défaut si absent", () => {

@@ -3,8 +3,9 @@
 // modification des pages n'est nécessaire pour en bénéficier. Extrait dans
 // son propre fichier pour rester testable sans dépendre de React/JSX (voir
 // tests/editor-panel-helpers.test.ts).
-export function mediaLabel(key: string): string {
-  if (key === "heroMediaId") return "Image hero";
+export function mediaLabel(key: string, types: string[] = []): string {
+  const isVideo = types.includes("video") || types.includes("external_video");
+  if (key === "heroMediaId") return isVideo ? "Vidéo hero" : "Image hero";
   if (key.startsWith("gallery.") || key.startsWith("urbanGallery.")) return "Galerie principale";
   if (key === "coverMediaId" || key === "storyCoverMediaId") return "Image de couverture";
   if (key.startsWith("team.")) return "Portrait";

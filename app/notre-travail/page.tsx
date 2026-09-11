@@ -66,6 +66,16 @@ export function WorkBody({
   editBasePath?: string;
 }) {
   const ea = (attrs: Record<string, string>) => (editable ? attrs : {});
+  // `hiddenSections` était déjà déclaré dans les valeurs par défaut mais
+  // jamais relu au rendu sur cette page (voir l'audit Phase UX 2) : "Masquer"
+  // depuis l'éditeur n'avait donc aucun effet visible ni public. On reproduit
+  // ici le comportement déjà correct de l'accueil (app/page.tsx) : la
+  // section masquée disparaît du site public, et reste visible mais atténuée
+  // dans l'éditeur pour pouvoir être réaffichée — sans wrapper supplémentaire,
+  // pour ne rien changer à la structure/au design public.
+  const hidden = (key: string) => (work.hiddenSections || []).includes(key);
+  const shellClass = (key: string, base: string) => (hidden(key) ? `${base} ve-hidden-section` : base);
+  const shown = (key: string) => !hidden(key) || editable;
 
   // `work.chapters` vient d'un JSON libre (cms_settings), sans passer par la
   // normalisation déjà appliquée aux galeries de projets (lib/public-cms.ts).
@@ -82,24 +92,28 @@ export function WorkBody({
   return (
     <PageShell general={work.general} editable={editable} editBasePath={editBasePath}>
       <div className={editable ? "visual-editing" : ""}>
-        <section className="page-hero dark-page" {...ea({ "data-section-key": "work-hero" })}>
-          <div className="wrap">
-            <p className="eyebrow light" {...ea({ "data-edit-key": "eyebrow" })}>{work.eyebrow}</p>
-            <h1 {...ea({ "data-edit-key": "title" })}>{work.title}</h1>
-            <p {...ea({ "data-edit-key": "intro" })}>{work.intro}</p>
-          </div>
-        </section>
+        {shown("work-hero") && (
+          <section className={shellClass("work-hero", "page-hero dark-page")} {...ea({ "data-section-key": "work-hero" })}>
+            <div className="wrap">
+              <p className="eyebrow light" {...ea({ "data-edit-key": "eyebrow" })}>{work.eyebrow}</p>
+              <h1 {...ea({ "data-edit-key": "title" })}>{work.title}</h1>
+              <p {...ea({ "data-edit-key": "intro" })}>{work.intro}</p>
+            </div>
+          </section>
+        )}
 
-        <section className="story-intro section wrap" {...ea({ "data-section-key": "story" })}>
-          <div>
-            <p className="section-index" {...ea({ "data-edit-key": "storyLabel" })}>{work.storyLabel}</p>
-            <h2 {...ea({ "data-edit-key": "storyTitle" })}>{work.storyTitle}</h2>
-          </div>
-          <div>
-            <p className="story-date">{displayDate(work.storyDate)}</p>
-            <p {...ea({ "data-edit-key": "storyText" })}>{work.storyText}</p>
-          </div>
-        </section>
+        {shown("story") && (
+          <section className={shellClass("story", "story-intro section wrap")} {...ea({ "data-section-key": "story" })}>
+            <div>
+              <p className="section-index" {...ea({ "data-edit-key": "storyLabel" })}>{work.storyLabel}</p>
+              <h2 {...ea({ "data-edit-key": "storyTitle" })}>{work.storyTitle}</h2>
+            </div>
+            <div>
+              <p className="story-date">{displayDate(work.storyDate)}</p>
+              <p {...ea({ "data-edit-key": "storyText" })}>{work.storyText}</p>
+            </div>
+          </section>
+        )}
 
         <div {...ea({ "data-media-key": "storyCoverMediaId", "data-alt-key": "storyCoverAlt" })}>
           {work.storyCoverMediaId ? (
@@ -113,7 +127,8 @@ export function WorkBody({
           )}
         </div>
 
-        <section className="story-flow wrap" {...ea({ "data-section-key": "chapters" })}>
+        {shown("chapters") && (
+        <section className={shellClass("chapters", "story-flow wrap")} {...ea({ "data-section-key": "chapters" })}>
           {chapters.map((chapter: any, i: number) => (
             <article className={i % 2 ? "chapter reverse" : "chapter"} {...ea({ "data-section-key": `work-chapter:${i}` })} key={i}>
               <div className="chapter-copy">
@@ -143,8 +158,10 @@ export function WorkBody({
             </article>
           ))}
         </section>
+        )}
 
-        <section className="section dark-section" id="film" {...ea({ "data-section-key": "film" })}>
+        {shown("film") && (
+        <section className={shellClass("film", "section dark-section")} id="film" {...ea({ "data-section-key": "film" })}>
           <div className="wrap film-story">
             <div>
               <p className="section-index light">Le film</p>
@@ -155,9 +172,10 @@ export function WorkBody({
             </div>
           </div>
         </section>
+        )}
 
-        {projects.length > 0 && (
-          <section className="section wrap cms-project-index" {...ea({ "data-section-key": "projects" })}>
+        {projects.length > 0 && shown("projects") && (
+          <section className={shellClass("projects", "section wrap cms-project-index")} {...ea({ "data-section-key": "projects" })}>
             <div className="split-heading">
               <div>
                 <p className="section-index">Histoires publiées</p>
@@ -188,7 +206,8 @@ export function WorkBody({
           </section>
         )}
 
-        <section className="urban section wrap" {...ea({ "data-section-key": "urban" })}>
+        {shown("urban") && (
+        <section className={shellClass("urban", "urban section wrap")} {...ea({ "data-section-key": "urban" })}>
           <div className="split-heading">
             <div>
               <p className="section-index" {...ea({ "data-edit-key": "urbanLabel" })}>{work.urbanLabel}</p>
@@ -219,6 +238,7 @@ export function WorkBody({
             <span {...ea({ "data-edit-key": "urbanCta" })}>{work.urbanCta}</span>
           </Link>
         </section>
+        )}
       </div>
     </PageShell>
   );
