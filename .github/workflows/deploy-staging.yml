@@ -53,6 +53,8 @@ jobs:
           CF_D1_DATABASE_ID: ${{ vars.CF_D1_DATABASE_ID }}
           CF_R2_BUCKET_NAME: ${{ vars.CF_R2_BUCKET_NAME }}
           CF_ROUTE_PATTERN: ${{ vars.CF_ROUTE_PATTERN }}
+          CF_ACCESS_TEAM_DOMAIN: ${{ vars.CF_ACCESS_TEAM_DOMAIN }}
+          CF_ACCESS_AUD: ${{ vars.CF_ACCESS_AUD }}
 
       - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
