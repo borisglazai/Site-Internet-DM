@@ -23,7 +23,16 @@ export async function visualContent<T extends VisualContent>(
     .prepare("SELECT value FROM cms_settings WHERE key=?")
     .bind(draftKey(pageKey))
     .first<{ value: string }>();
-  return row ? parseJson(row.value, published) : published;
+  if (!row) return published;
+  // Un brouillon plus ancien qu'un champ récemment introduit (heroMediaAlt,
+  // hiddenSections, etc.) ne le contient pas : l'utiliser tel quel privait
+  // le rendu de toute valeur de repli et faisait planter la page (Worker
+  // 1101 sur /admin/editor/services et /admin/editor/a-propos — un brouillon
+  // sans `services`/`values` faisait échouer un .filter()/.map() sur
+  // `undefined`). On fusionne donc le brouillon sur les valeurs publiées
+  // plutôt que de le substituer entièrement : un champ absent du brouillon
+  // retombe sur sa valeur publiée/par défaut au lieu de disparaître.
+  return { ...published, ...parseJson<Partial<T>>(row.value, {}) };
 }
 
 /**

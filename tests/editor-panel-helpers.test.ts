@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mediaLabel } from "../lib/media-label.ts";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { resolve, dirname } from "node:path";
+import { mediaLabel, heroMediaTarget } from "../lib/media-label.ts";
 import { sectionBounds, sectionOrder, sectionLabel } from "../lib/section-order.ts";
+
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 test("mediaLabel() donne un libellé contextuel selon la zone", () => {
   assert.equal(mediaLabel("heroMediaId"), "Image hero");
@@ -30,6 +35,28 @@ test("sectionLabel() donne un titre de panneau contextuel et lisible", () => {
   assert.equal(sectionLabel("team:0"), "Membre de l’équipe");
   assert.equal(sectionLabel("custom:abc-123"), "Section personnalisée");
   assert.equal(sectionLabel("une-clef-inconnue"), "Section");
+});
+
+test("heroMediaTarget() calcule la cible média du hero sans dépendre d'un élément DOM", () => {
+  // Le bouton de raccourci "Ajouter/gérer le média du hero" dans le panneau
+  // section repose sur cette fonction pour rester accessible même quand le
+  // hero n'a pas encore de média — voir l'audit Phase UX 2 bis, point 1.
+  assert.deepEqual(heroMediaTarget({ heroType: "image" }), { key: "heroMediaId", types: ["image"], altKey: "heroMediaAlt" });
+  assert.deepEqual(heroMediaTarget({ heroType: "video" }), { key: "heroMediaId", types: ["video", "external_video"], altKey: undefined });
+  assert.deepEqual(heroMediaTarget({}), { key: "heroMediaId", types: ["image"], altKey: "heroMediaAlt" }, "sans heroType, on suppose une image");
+});
+
+test("régression : l'overlay du hero (.hero-shade) ne doit jamais intercepter les clics", () => {
+  // Root cause du bug « pas d'action d'ajout visible sur un hero vide » :
+  // .hero-shade est un calque décoratif positionné par-dessus .hero-media
+  // (même zone, plus tard dans le DOM) ; sans pointer-events:none, un clic
+  // sur le hero atterrit sur ce calque au lieu du média, et remonte donc au
+  // <section data-section-key="hero">, jamais au data-media-key. Ce test
+  // échoue si le correctif CSS disparaît (voir app/globals.css).
+  const css = readFileSync(resolve(root, "app/globals.css"), "utf8");
+  const match = css.match(/\.hero-shade\{[^}]*\}/);
+  assert.ok(match, ".hero-shade doit exister dans app/globals.css");
+  assert.ok(match[0].includes("pointer-events:none"), ".hero-shade doit avoir pointer-events:none pour laisser passer les clics vers .hero-media");
 });
 
 test("sectionOrder() retombe sur l'ordre par défaut si absent", () => {

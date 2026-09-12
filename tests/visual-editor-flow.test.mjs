@@ -72,6 +72,49 @@ function applyMigrations() {
   sqlite.close();
 }
 
+function withD1(fn) {
+  const dir = resolve(root, ".wrangler/state/v3/d1/miniflare-D1DatabaseObject");
+  const file = readdirSync(dir).find((entry) => entry.endsWith(".sqlite"));
+  const sqlite = new DatabaseSync(resolve(dir, file));
+  try {
+    return fn(sqlite);
+  } finally {
+    sqlite.close();
+  }
+}
+
+// Simule un brouillon enregistré par une version antérieure de l'éditeur,
+// avant l'introduction de champs comme `heroMediaAlt`/`hiddenSections`, ou
+// avant que `services`/`values`/`team` existent dans le brouillon. On écrit
+// directement en base plutôt que via l'API : l'éditeur actuel ne produit
+// jamais lui-même un brouillon incomplet (il part toujours d'un objet
+// entièrement défaulté), donc seule une insertion directe reproduit
+// fidèlement un « vieux » brouillon.
+function insertLegacyDraft(pageKey, content) {
+  withD1((sqlite) => {
+    sqlite
+      .prepare(
+        "INSERT INTO cms_settings (key,value,updated_by,updated_at) VALUES (?,?,?,CURRENT_TIMESTAMP) " +
+          "ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=CURRENT_TIMESTAMP",
+      )
+      .run(`visual_draft_${pageKey}`, JSON.stringify(content), ADMIN_EMAIL);
+  });
+}
+
+function insertProjectFixture(slug, title) {
+  withD1((sqlite) => {
+    sqlite.prepare("INSERT INTO projects (title, slug, status, visible) VALUES (?,?,?,?)").run(title, slug, "published", 1);
+  });
+}
+
+async function discardDraft(pageKey) {
+  await fetch(`${baseUrl}/api/admin/visual-editor`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...AUTH_HEADERS },
+    body: JSON.stringify({ pageKey, action: "discard" }),
+  });
+}
+
 async function get(path, headers = {}) {
   const response = await fetch(`${baseUrl}${path}`, { headers });
   return { response, text: await response.text() };
@@ -368,4 +411,129 @@ test("17. réorganiser la galerie urbaine persiste le nouvel ordre et se reflèt
   const firstAfter = after.text.indexOf("/api/media/101");
   const secondAfter = after.text.indexOf("/api/media/102");
   assert.ok(secondAfter > -1 && firstAfter > -1 && secondAfter < firstAfter, "la réorganisation doit inverser l'ordre affiché");
+});
+
+// --- Phase UX 2 bis : régressions staging (hero sans média, Worker 1101 sur
+// des brouillons anciens/partiels) ---
+
+test("18. régression Worker 1101 : un ancien brouillon Services sans `services` ni `hiddenSections` ne plante plus /admin/editor/services", async () => {
+  // Reproduit exactement le bug de staging : `visualContent()` substituait
+  // entièrement le brouillon aux valeurs publiées, donc un brouillon plus
+  // ancien que le champ `services` faisait planter `page.services.filter()`
+  // (TypeError: Cannot read properties of undefined). Voir le correctif dans
+  // lib/visual-editor.ts (fusion brouillon + publié) et app/services/page.tsx
+  // (repli `Array.isArray`).
+  insertLegacyDraft("services", { eyebrow: "Ancien brouillon", title: "Ancien titre" });
+  const { response, text } = await get("/admin/editor/services", AUTH_HEADERS);
+  assert.equal(response.status, 200, "la route ne doit jamais renvoyer 500/1101 pour un brouillon incomplet");
+  assert.ok(!text.includes("Internal Server Error") && !text.includes("Erreur 1101"));
+  assert.ok(text.includes("Ancien titre"), "les champs présents dans le brouillon doivent tout de même s'afficher");
+  await discardDraft("services");
+});
+
+test("19. régression Worker 1101 : un ancien brouillon À propos sans `values` ni `hiddenSections` ne plante plus /admin/editor/a-propos", async () => {
+  insertLegacyDraft("about", { eyebrow: "Ancien brouillon", title: "Ancien titre" });
+  const { response, text } = await get("/admin/editor/a-propos", AUTH_HEADERS);
+  assert.equal(response.status, 200, "la route ne doit jamais renvoyer 500/1101 pour un brouillon incomplet");
+  assert.ok(!text.includes("Internal Server Error") && !text.includes("Erreur 1101"));
+  assert.ok(text.includes("Ancien titre"));
+  await discardDraft("about");
+});
+
+test("20. un ancien brouillon Accueil sans heroMediaAlt/hiddenSections/services/principles/beyondItems ne plante pas /admin/editor", async () => {
+  insertLegacyDraft("home", {
+    heroTitle: "Ancien titre accueil", heroSubtitle: "x",
+    cta1: "x", cta1Url: "/contact", cta2: "x", cta2Url: "/contact",
+    // heroMediaAlt, hiddenSections, services, principles, beyondItems, sectionOrder : volontairement absents
+  });
+  const { response, text } = await get("/admin/editor", AUTH_HEADERS);
+  assert.equal(response.status, 200);
+  assert.ok(!text.includes("Internal Server Error"));
+  assert.ok(text.includes("Ancien titre accueil"));
+  await discardDraft("home");
+});
+
+test("21. un brouillon volontairement partiel, sauvegardé via l'API réelle, ne fait planter aucune route de l'éditeur", async () => {
+  // Contrairement aux tests 18-20 (brouillon injecté directement en base pour
+  // simuler l'ancien format), celui-ci passe par le vrai chemin d'écriture
+  // (`action: "save"`) avec un contenu délibérément minimal — pour détecter
+  // à l'avenir toute nouvelle lecture non protégée, quelle que soit son
+  // origine.
+  const response = await fetch(`${baseUrl}/api/admin/visual-editor`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...AUTH_HEADERS },
+    body: JSON.stringify({ pageKey: "services", action: "save", content: { title: "Partiel" } }),
+  });
+  assert.equal(response.ok, true);
+  for (const path of ["/admin/editor/services", "/admin/editor/services?preview=1"]) {
+    const { response: pageResponse } = await get(path, AUTH_HEADERS);
+    assert.equal(pageResponse.status, 200, `${path} ne doit pas planter avec un brouillon partiel`);
+  }
+  await discardDraft("services");
+});
+
+test("22. toutes les routes éditeur principales (y compris la page projet) retournent 200, sans brouillon", async () => {
+  insertProjectFixture("projet-test-phase-ux2-bis", "Projet de test");
+  const routes = [
+    "/admin/editor",
+    "/admin/editor/notre-travail",
+    "/admin/editor/services",
+    "/admin/editor/a-propos",
+    "/admin/editor/contact",
+    "/admin/editor/projets/projet-test-phase-ux2-bis",
+  ];
+  for (const path of routes) {
+    const { response, text } = await get(path, AUTH_HEADERS);
+    assert.equal(response.status, 200, `${path} doit répondre 200`);
+    assert.ok(!text.includes("Internal Server Error") && !text.includes("Erreur 1101"), `${path} ne doit jamais lever d'exception non gérée`);
+  }
+});
+
+test("23. la prévisualisation de toutes les routes éditeur principales retourne 200", async () => {
+  const routes = [
+    "/admin/editor?preview=1",
+    "/admin/editor/notre-travail?preview=1",
+    "/admin/editor/services?preview=1",
+    "/admin/editor/a-propos?preview=1",
+    "/admin/editor/contact?preview=1",
+    "/admin/editor/projets/projet-test-phase-ux2-bis?preview=1",
+  ];
+  for (const path of routes) {
+    const { response, text } = await get(path, AUTH_HEADERS);
+    assert.equal(response.status, 200, `${path} doit répondre 200`);
+    assert.ok(!text.includes("Internal Server Error"), `${path} ne doit jamais lever d'exception non gérée`);
+  }
+});
+
+test("24. le site public (y compris la page projet) reste propre, sans aucune UI d'éditeur", async () => {
+  for (const path of ["/", "/notre-travail", "/services", "/a-propos", "/contact", "/projets/projet-test-phase-ux2-bis"]) {
+    const { response, text } = await get(path);
+    assert.equal(response.status, 200, `${path} devrait répondre 200`);
+    assert.ok(!text.includes("data-edit-key"), `${path} ne doit porter aucun attribut data-edit-key`);
+    assert.ok(!text.includes("data-media-key"), `${path} ne doit porter aucun attribut data-media-key`);
+    assert.ok(!text.includes("data-section-key"), `${path} ne doit porter aucun attribut data-section-key`);
+    assert.ok(!text.includes("ve-bar"), `${path} ne doit pas charger la barre d'outils de l'éditeur`);
+  }
+});
+
+test("25. hero sans média puis média ajouté : transition du placeholder vers l'image avec cadrage et alt", async () => {
+  // Avant correctif, la zone média du hero restait techniquement cliquable,
+  // mais le calque .hero-shade posé par-dessus interceptait le clic et
+  // routait systématiquement vers le panneau section (voir le correctif CSS
+  // dans app/globals.css et le test unitaire dédié dans
+  // editor-panel-helpers.test.ts). Ce test vérifie la partie serveur de la
+  // séquence attendue : hero vide → aucune image, puis média ajouté → image
+  // avec cadrage et alt appliqués, sans reload nécessaire côté données.
+  const emptyHero = { ...cropDraft, heroMediaId: null, heroMediaAlt: "" };
+  await postVisualEditor("save", emptyHero);
+  const empty = await get("/admin/editor", AUTH_HEADERS);
+  assert.ok(empty.text.includes("hero-placeholder"), "sans média, le hero doit afficher son placeholder");
+  assert.ok(!empty.text.includes("object-position:center top"), "sans média, aucun cadrage ne doit être appliqué");
+
+  const withMedia = { ...cropDraft, heroMediaId: 7, heroPosition: "center top", heroMediaAlt: "Alt après ajout" };
+  await postVisualEditor("save", withMedia);
+  const filled = await get("/admin/editor", AUTH_HEADERS);
+  assert.ok(!filled.text.includes("hero-placeholder"), "une fois le média ajouté, le placeholder doit disparaître");
+  assert.ok(filled.text.includes("object-position:center top"), "le cadrage doit être disponible dès l'ajout du média");
+  assert.ok(filled.text.includes('alt="Alt après ajout"'), "l'alt doit être appliqué dès l'ajout du média");
 });

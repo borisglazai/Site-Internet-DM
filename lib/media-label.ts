@@ -15,3 +15,16 @@ export function mediaLabel(key: string, types: string[] = []): string {
   if (key.startsWith("customSections.")) return "Média de section";
   return "Média sélectionné";
 }
+
+/**
+ * Calcule la cible média du hero (clé, types, champ alt) à partir du seul
+ * contenu de la page — sans dépendre d'un élément DOM cliqué. Utilisé par le
+ * bouton de raccourci du panneau section ("Ajouter/gérer le média du hero")
+ * pour rester accessible même quand le hero n'a pas encore de média, ou
+ * quand un élément visuel (l'overlay du hero) intercepte le clic direct sur
+ * la zone média (voir l'audit Phase UX 2 bis, point 1).
+ */
+export function heroMediaTarget(content: Record<string, unknown>): { key: string; types: string[]; altKey?: string } {
+  const isVideo = content.heroType === "video";
+  return { key: "heroMediaId", types: isVideo ? ["video", "external_video"] : ["image"], altKey: isVideo ? undefined : "heroMediaAlt" };
+}

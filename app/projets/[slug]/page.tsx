@@ -110,7 +110,10 @@ export function ProjectBody({
                 <p {...ea({ "data-edit-key": "description" })}>{project.description}</p>
               </div>
               <div className="chapter-media" {...ea({ "data-gallery-key": "gallery" })}>
-                {project.gallery.map((entry: any, index: number) => (
+                {/* Un brouillon plus ancien peut ne pas contenir `gallery` : sans
+                    repli, `.map()` sur `undefined` faisait planter la route
+                    (voir l'audit Phase UX 2 bis, point 2). */}
+                {(Array.isArray(project.gallery) ? project.gallery : []).map((entry: any, index: number) => (
                   <figure key={`${entry.id}-${index}`} {...ea({ "data-media-key": `gallery.${index}.id`, "data-alt-key": `gallery.${index}.alt` })}>
                     <img className="cms-image" src={mediaUrl(entry.id, "desktop")} alt={entry.alt || title} />
                     {entry.caption && <figcaption {...ea({ "data-edit-key": `gallery.${index}.caption` })}>{entry.caption}</figcaption>}
