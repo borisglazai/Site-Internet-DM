@@ -59,6 +59,34 @@ test("régression : l'overlay du hero (.hero-shade) ne doit jamais intercepter l
   assert.ok(match[0].includes("pointer-events:none"), ".hero-shade doit avoir pointer-events:none pour laisser passer les clics vers .hero-media");
 });
 
+test("régression : chaque route /admin/editor/** monte <VisualEditor key={pageKey}> pour empêcher toute fuite d'état entre pages", () => {
+  // Root cause investiguée pour « Services affiche du contenu de Notre
+  // travail » : content/historique/sélection de <VisualEditor> sont tous
+  // initialisés une seule fois (useState/useRef), jamais resynchronisés si
+  // seules les props changent. Sans clé distincte par page, une réutilisation
+  // de l'instance entre deux navigations (même hors des scénarios reproduits
+  // localement) ferait hériter la nouvelle page de l'état de l'ancienne.
+  // `key={pageKey}` garantit par construction React un démontage/remontage
+  // complet à chaque changement de page — voir tests/visual-editor-navigation
+  // .test.mjs pour la vérification en conditions réelles (navigateur).
+  const editorPages = [
+    "app/admin/editor/page.tsx",
+    "app/admin/editor/notre-travail/page.tsx",
+    "app/admin/editor/services/page.tsx",
+    "app/admin/editor/a-propos/page.tsx",
+    "app/admin/editor/contact/page.tsx",
+    "app/admin/editor/projets/[slug]/page.tsx",
+  ];
+  for (const relativePath of editorPages) {
+    const source = readFileSync(resolve(root, relativePath), "utf8");
+    const start = source.indexOf("<VisualEditor");
+    assert.ok(start > -1, `${relativePath} doit monter <VisualEditor>`);
+    const end = source.indexOf("/>", start);
+    const block = source.slice(start, end > -1 ? end : start + 400);
+    assert.ok(/\bkey=/.test(block), `${relativePath} doit monter <VisualEditor key={pageKey} .../> (clé manquante)`);
+  }
+});
+
 test("sectionOrder() retombe sur l'ordre par défaut si absent", () => {
   assert.deepEqual(sectionOrder({}), ["manifest", "gallery", "services", "featured", "film", "approach", "beyond", "final"]);
   assert.deepEqual(sectionOrder({ sectionOrder: ["a", "b"] }), ["a", "b"]);

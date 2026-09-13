@@ -17,6 +17,7 @@ export default async function AboutEditorPage({ searchParams }: Props) {
     <>
       <AboutBody about={about} editable={!isPreview} editBasePath="/admin/editor" />
       <VisualEditor
+        key="about"
         pageKey="about"
         initial={about}
         media={media as any[]}

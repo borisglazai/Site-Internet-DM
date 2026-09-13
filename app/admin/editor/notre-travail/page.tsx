@@ -19,6 +19,7 @@ export default async function WorkEditorPage({ searchParams }: Props) {
     <>
       <WorkBody work={work} projects={projects} editable={!isPreview} editBasePath="/admin/editor" />
       <VisualEditor
+        key="work"
         pageKey="work"
         initial={work}
         media={media as any[]}

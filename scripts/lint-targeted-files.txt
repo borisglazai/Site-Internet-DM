@@ -40,3 +40,4 @@ tests/visual-editor-flow.test.mjs
 lib/media-label.ts
 lib/section-order.ts
 tests/editor-panel-helpers.test.ts
+tests/visual-editor-navigation.test.mjs

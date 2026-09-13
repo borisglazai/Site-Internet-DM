@@ -22,6 +22,7 @@ export default async function ProjectEditorPage({ params, searchParams }: Props)
     <>
       <ProjectBody project={project} editable={!isPreview} preview={isPreview} editBasePath="/admin/editor" />
       <VisualEditor
+        key={`project_${project.id}`}
         pageKey={`project_${project.id}`}
         initial={project}
         media={media as any[]}

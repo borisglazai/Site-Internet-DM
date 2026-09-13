@@ -15,6 +15,16 @@ const sectionTypes=[["title-text","Texte éditorial"],["image-full","Image plein
 // le même principe côté rendu public) — la page projet en cours est ajoutée
 // dynamiquement si elle n'y figure pas déjà.
 const pageNav=[["/admin/editor","Accueil"],["/admin/editor/notre-travail","Notre travail"],["/admin/editor/services","Services"],["/admin/editor/a-propos","À propos"],["/admin/editor/contact","Contact"]];
+// `content`, l'historique undo/redo, la section/média sélectionné(e), etc.
+// sont tous initialisés une seule fois par instance (`useState(initial)`,
+// `useRef([initial])`) : ils ne se resynchronisent jamais si seules les
+// props changent. Sous navigation client (React re-render de la même
+// position dans l'arbre plutôt que démontage), une nouvelle page pourrait
+// donc hériter du contenu/de l'état de la précédente. Chaque appelant DOIT
+// donc monter <VisualEditor key={pageKey} .../> — la clé force un
+// démontage/remontage complet à chaque changement de page, garantissant un
+// état neuf par `pageKey` sans avoir à resynchroniser chaque state
+// individuellement (voir l'audit « isolation d'état entre pages »).
 export function VisualEditor({pageKey,initial,media,preview=false,editUrl,previewUrl,pageLabel,hasDraft=false}:Props){
  const [content,setContent]=useState(initial),[dirty,setDirty]=useState(false),[saving,setSaving]=useState(false),[message,setMessage]=useState(hasDraft?"Brouillon enregistré":"Publié"),[lastSavedAt,setLastSavedAt]=useState<Date|null>(null),[picker,setPicker]=useState<MediaTarget>(null),[mediaMenu,setMediaMenu]=useState<MediaTarget>(null),[galleryKey,setGalleryKey]=useState<string|null>(null),[selectedSection,setSelectedSection]=useState<string|null>(null),[adding,setAdding]=useState<{after:string|null}|null>(null),[linkKeys,setLinkKeys]=useState<{label:string;url:string}|null>(null),[collapsed,setCollapsed]=useState(false),[activeText,setActiveText]=useState<{node:HTMLElement;path:string;before:string}|null>(null),[moreOpen,setMoreOpen]=useState(false);const history=useRef<Record<string,any>[]>([initial]),cursor=useRef(0),drag=useRef<number|null>(null),contentRef=useRef(content);contentRef.current=content;const selectedLink=useMemo(()=>linkKeys?{label:String(get(content,linkKeys.label)||""),url:String(get(content,linkKeys.url)||"")}:null,[content,linkKeys]),gallery=galleryKey?normalizeMediaList(get(content,galleryKey),{includeHidden:true}):[];
  const mediaAsideRef=useRef<HTMLElement>(null),sectionSheetRef=useRef<HTMLElement>(null),galleryPanelRef=useRef<HTMLElement>(null);

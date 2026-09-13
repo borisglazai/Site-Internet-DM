@@ -19,6 +19,7 @@ export default async function HomeEditorPage({ searchParams }: Props) {
     <>
       <HomeBody home={home} projects={projects} editable={!isPreview} editBasePath="/admin/editor" />
       <VisualEditor
+        key="home"
         pageKey="home"
         initial={home}
         media={media as any[]}

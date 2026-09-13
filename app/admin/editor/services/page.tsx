@@ -17,6 +17,7 @@ export default async function ServicesEditorPage({ searchParams }: Props) {
     <>
       <ServicesBody page={page} editable={!isPreview} editBasePath="/admin/editor" />
       <VisualEditor
+        key="services"
         pageKey="services"
         initial={page}
         media={media as any[]}

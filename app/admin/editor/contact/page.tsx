@@ -17,6 +17,7 @@ export default async function ContactEditorPage({ searchParams }: Props) {
     <>
       <ContactBody contact={contact} editable={!isPreview} editBasePath="/admin/editor" />
       <VisualEditor
+        key="contact"
         pageKey="contact"
         initial={contact}
         media={media as any[]}
