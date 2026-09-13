@@ -1,0 +1,29 @@
+/* Styles de l'éditeur V2 — chargés UNIQUEMENT par app/admin/editor-v2/layout.tsx.
+   Jamais importés par une page publique ni par V1 (app/visual-editor.css) :
+   voir l'audit V2, section « SITE PUBLIC ». Classes préfixées ve2- pour
+   rester non ambiguës si V1 et V2 étaient un jour rendus côte à côte. */
+.ve2-active{padding-top:60px}
+.ve2-bar{position:fixed;z-index:1200;inset:0 0 auto;height:60px;background:#111;color:#fff;display:flex;align-items:center;gap:18px;padding:9px 20px;font:500 12px/1.25 var(--sans, system-ui);box-shadow:0 2px 20px #0004}
+.ve2-bar-status{display:grid;min-width:200px}
+.ve2-bar-status b{font-size:13px}
+.ve2-bar-status small{color:#aaa;display:flex;align-items:center;gap:8px}
+.ve2-bar-status small.ve2-dirty{color:#f78b18}
+.ve2-saved-at{font-style:normal;color:#777}
+.ve2-page-select{background:#222;color:#fff;border:1px solid #444;border-radius:4px;padding:9px 10px;font:500 12px var(--sans, system-ui);cursor:pointer}
+.ve2-history{display:flex;gap:4px}
+.ve2-history button{font-size:18px;padding:5px 9px;border:1px solid #444;background:#222;color:#fff;border-radius:4px;cursor:pointer}
+.ve2-history button:disabled{opacity:.4;cursor:default}
+.ve2-bar nav{margin-left:auto;display:flex;gap:8px;align-items:center}
+.ve2-bar nav button,.ve2-bar nav a{border:1px solid #444;background:#222;color:#fff;border-radius:4px;padding:9px 12px;cursor:pointer;font:500 12px var(--sans, system-ui);text-decoration:none}
+.ve2-bar nav button:disabled{opacity:.4;cursor:default}
+.ve2-publish{background:#f78b18;border-color:#f78b18!important;color:#111!important;font-weight:700}
+.ve2-more{position:relative}
+.ve2-more-trigger{font-size:16px;line-height:1;padding:9px 14px}
+.ve2-more-menu{position:absolute;right:0;top:calc(100% + 6px);background:#fff;color:#111;border:1px solid #d9d5ce;border-radius:8px;box-shadow:0 12px 40px #0004;padding:6px;min-width:220px}
+.ve2-more-menu button{width:100%;text-align:left;border:0;background:none;color:#111;padding:9px 10px;border-radius:5px;cursor:pointer}
+.ve2-more-menu button:hover{background:#f5f3ef}
+.ve2-more-menu .ve2-danger{color:#b3261e}
+[data-edit-key]{transition:outline-color .15s}
+[data-edit-key]:hover{outline:1px dashed #f78b18;outline-offset:5px;cursor:text}
+.ve2-editing{outline:2px solid #f78b18!important;outline-offset:6px;background:#f78b1814}
+.ve2-preview-return{position:fixed;z-index:1300;left:18px;bottom:18px;background:#f78b18;color:#111;padding:12px 17px;font:700 11px/1 var(--sans, system-ui);text-decoration:none;border-radius:4px;box-shadow:0 8px 30px #0003}
