@@ -214,6 +214,100 @@ test("Entrée valide un champ titre ; undo/redo restaurent le texte", async () =
   }
 });
 
+test("plusieurs modifications très rapprochées restent déterministes (contenu final, historique, undo/redo)", async () => {
+  // Régression pour setField() dans lib/editor-v2/store.tsx : la version
+  // précédente calculait `next` à l'intérieur de l'updater passé à
+  // setContent(), et dépendait donc implicitement du fait que React invoque
+  // cet updater de façon synchrone avant que setField() ne poursuive — un
+  // comportement observé mais jamais garanti. Le correctif calcule `next`
+  // directement à partir de `contentRef.current` (tenu à jour de façon
+  // synchrone), pour rester déterministe même si plusieurs setField()
+  // s'enchaînent avant qu'un nouveau rendu React n'ait eu lieu — exactement
+  // ce que ce test provoque : trois champs édités à la suite, sans aucune
+  // attente entre les validations (chaque clic sur le champ suivant valide
+  // implicitement le précédent, voir TextEditor.onClick).
+  const { context, page } = await newAdminPage();
+  try {
+    await page.goto(baseUrl + editorUrls.about, { waitUntil: "networkidle" });
+
+    const title = page.locator('[data-edit-key="title"]');
+    const intro = page.locator('[data-edit-key="intro"]');
+    const startText = page.locator('[data-edit-key="startText"]');
+    const originals = {
+      title: (await title.textContent()).trim(),
+      intro: (await intro.textContent()).trim(),
+      startText: (await startText.textContent()).trim(),
+    };
+
+    await title.click();
+    await page.keyboard.press("Control+A");
+    await page.keyboard.type("TITRE RAPIDE 1", { delay: 0 });
+    await intro.click(); // valide "title" et démarre l'édition de "intro", sans attente
+    await page.keyboard.press("Control+A");
+    await page.keyboard.type("INTRO RAPIDE 2", { delay: 0 });
+    await startText.click(); // valide "intro" et démarre l'édition de "startText", sans attente
+    await page.keyboard.press("Control+A");
+    await page.keyboard.type("TEXTE RAPIDE 3", { delay: 0 });
+    await page.locator(".ve2-bar-status").click(); // valide "startText"
+    await page.waitForTimeout(200);
+
+    // Contenu final correct : aucune des trois éditions n'a été perdue ou
+    // écrasée par une autre malgré l'absence d'attente entre elles.
+    assert.equal((await title.textContent()).trim(), "TITRE RAPIDE 1");
+    assert.equal((await intro.textContent()).trim(), "INTRO RAPIDE 2");
+    assert.equal((await startText.textContent()).trim(), "TEXTE RAPIDE 3");
+
+    const undoBtn = page.locator(".ve2-history button").first();
+    const redoBtn = page.locator(".ve2-history button").nth(1);
+
+    // Historique correct : undo doit remonter chaque étape dans l'ordre
+    // inverse (startText, puis intro, puis title), une à la fois.
+    await undoBtn.click();
+    await page.waitForTimeout(150);
+    assert.equal((await startText.textContent()).trim(), originals.startText, "1er undo doit annuler la 3e édition (startText)");
+    assert.equal((await intro.textContent()).trim(), "INTRO RAPIDE 2", "les éditions précédentes doivent rester en place");
+    assert.equal((await title.textContent()).trim(), "TITRE RAPIDE 1");
+
+    await undoBtn.click();
+    await page.waitForTimeout(150);
+    assert.equal((await intro.textContent()).trim(), originals.intro, "2e undo doit annuler la 2e édition (intro)");
+    assert.equal((await title.textContent()).trim(), "TITRE RAPIDE 1", "l'édition la plus ancienne doit rester en place");
+
+    await undoBtn.click();
+    await page.waitForTimeout(150);
+    assert.equal((await title.textContent()).trim(), originals.title, "3e undo doit annuler la 1re édition (title)");
+
+    // redo doit rejouer chaque étape dans le bon ordre.
+    await redoBtn.click();
+    await page.waitForTimeout(150);
+    assert.equal((await title.textContent()).trim(), "TITRE RAPIDE 1", "1er redo doit rétablir la 1re édition (title)");
+
+    await redoBtn.click();
+    await page.waitForTimeout(150);
+    assert.equal((await intro.textContent()).trim(), "INTRO RAPIDE 2", "2e redo doit rétablir la 2e édition (intro)");
+
+    await redoBtn.click();
+    await page.waitForTimeout(150);
+    assert.equal((await startText.textContent()).trim(), "TEXTE RAPIDE 3", "3e redo doit rétablir la 3e édition (startText)");
+
+    // Le brouillon persisté doit lui aussi refléter les trois éditions.
+    await page.waitForTimeout(1600); // > debounce autosave (1200ms)
+    const draft = readSetting("visual_draft_about");
+    assert.ok(draft, "un brouillon doit avoir été enregistré");
+    const parsed = JSON.parse(draft);
+    assert.equal(parsed.title, "TITRE RAPIDE 1");
+    assert.equal(parsed.intro, "INTRO RAPIDE 2");
+    assert.equal(parsed.startText, "TEXTE RAPIDE 3");
+  } finally {
+    await context.close();
+    await fetch(`${baseUrl}/api/admin/visual-editor`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "oai-authenticated-user-email": ADMIN_EMAIL },
+      body: JSON.stringify({ pageKey: "about", action: "discard" }),
+    });
+  }
+});
+
 test("navigation Accueil → Services → À propos → Contact → Notre travail → Accueil : aucune fuite de state", async () => {
   const { context, page } = await newAdminPage();
   try {

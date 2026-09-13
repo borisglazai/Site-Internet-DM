@@ -97,23 +97,26 @@ export function EditorProvider<T extends object>({
   const getField = useCallback((path: string) => getPath(contentRef.current, path), []);
 
   const setField = useCallback((path: string, value: unknown) => {
-    // L'updater passé à setContent() doit rester PUR : React (mode strict, en
-    // développement) peut l'invoquer deux fois par mise à jour pour détecter
-    // les effets de bord. Muter `history.current`/appeler d'autres setters
-    // à l'intérieur le ferait deux fois par édition, désynchronisant
-    // durablement l'index d'historique (undo/redo cassés après une seule
-    // édition) — la tenue de l'historique se fait donc juste après, sur la
-    // valeur ainsi calculée, dans le corps de setField lui-même (qui, lui,
-    // ne s'exécute qu'une fois par appel réel).
-    let next: T | undefined;
-    setContent((current) => {
-      next = setPath(current, path, value);
-      return next;
-    });
-    contentRef.current = next as T;
+    // Calcule `next` à partir de `contentRef.current` (déjà tenu à jour de
+    // façon synchrone par tout ce qui touche au contenu — voir undo/redo
+    // plus bas), plutôt qu'à l'intérieur d'un updater passé à setContent().
+    // La forme précédente (`setContent((current) => {...})`) dépendait
+    // implicitement du fait que React invoque cet updater de façon
+    // synchrone avant que setField() ne poursuive — comportement observé,
+    // mais jamais garanti par React, et de toute façon invoqué DEUX fois en
+    // mode strict (dev), ce qui avait déjà causé un doublon d'historique
+    // dans une version antérieure de ce fichier (undo/redo cassés après une
+    // seule édition). Ce calcul explicite élimine cette dépendance de
+    // timing : `contentRef.current`/l'historique ne peuvent jamais contenir
+    // de valeur transitoire `undefined`, et plusieurs setField() très
+    // rapprochés (avant tout nouveau rendu) restent déterministes puisque
+    // chacun relit la valeur que le précédent vient d'écrire dans la ref.
+    const next = setPath(contentRef.current, path, value);
+    contentRef.current = next;
     dirtyRef.current = true;
+    setContent(next);
     history.current = history.current.slice(0, historyIndexRef.current + 1);
-    history.current.push(next as T);
+    history.current.push(next);
     historyIndexRef.current = history.current.length - 1;
     setHistoryIndex(historyIndexRef.current);
     setHistoryLength(history.current.length);
